@@ -1,0 +1,93 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">System Settings</h1>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <script>
+                    toastr.{{ category }}('{{ message }}');
+                </script>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">General Settings</h6>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('admin_settings') }}">
+                <div class="mb-3">
+                    <label for="logo" class="form-label">Application Name</label>
+                    <input type="text" class="form-control" id="logo" name="logo" value="{{ settings.get('logo', '') }}" required>
+                </div>
+                <div class="mb-3">
+                    <label for="openai_key" class="form-label">OpenAI API Key</label>
+                    <input type="password" class="form-control" id="openai_key" name="openai_key" value="{{ settings.get('openai_key', '') }}" required>
+                </div>
+                <div class="mb-3">
+                    <label for="copyright" class="form-label">Copyright Text</label>
+                    <input type="text" class="form-control" id="copyright" name="copyright" value="{{ settings.get('copyright', '') }}">
+                </div>
+                <div class="mb-3">
+                    <label for="about" class="form-label">About Page Content</label>
+                    <textarea class="form-control" id="about" name="about" rows="5">{{ settings.get('about', '') }}</textarea>
+                </div>
+                <div class="mb-3">
+                    <label for="contact" class="form-label">Contact Page Content</label>
+                    <textarea class="form-control" id="contact" name="contact" rows="5">{{ settings.get('contact', '') }}</textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">Save Settings</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/5/tinymce.min.js"></script>
+<script>
+tinymce.init({
+    selector: '#about, #contact',
+    height: 300,
+    menubar: false,
+    plugins: [
+        'advlist autolink lists link image charmap print preview anchor',
+        'searchreplace visualblocks code fullscreen',
+        'insertdatetime media table paste code help wordcount'
+    ],
+    toolbar: 'undo redo | formatselect | bold italic backcolor | \
+        alignleft aligncenter alignright alignjustify | \
+        bullist numlist outdent indent | removeformat | help'
+});
+
+// Handle form submission
+document.querySelector('form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    
+    // Update TinyMCE content
+    formData.set('about', tinymce.get('about').getContent());
+    formData.set('contact', tinymce.get('contact').getContent());
+    
+    fetch(this.action, {
+        method: 'POST',
+        body: formData
+    }).then(response => response.json())
+    .then(data => {
+        if (data.type === 'success') {
+            toastr.success(data.message);
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            toastr.error(data.message);
+        }
+    })
+    .catch(error => {
+        toastr.error('An error occurred while saving settings');
+    });
+});
+</script>
+{% endblock %} 

@@ -1,0 +1,132 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">Query Management</h1>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <script>
+                    toastr.{{ category }}('{{ message }}');
+                </script>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">User Queries</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Question</th>
+                            <th>Answer Found</th>
+                            <th>User Feedback</th>
+                            <th>Created At</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for query in queries %}
+                        <tr>
+                            <td>{{ query.id }}</td>
+                            <td>{{ query.question[:100] }}{% if query.question|length > 100 %}...{% endif %}</td>
+                            <td>
+                                {% if query.answer_found %}
+                                <span class="badge bg-success">Yes</span>
+                                {% else %}
+                                <span class="badge bg-danger">No</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if query.happy %}
+                                <span class="badge bg-success">Happy</span>
+                                {% else %}
+                                <span class="badge bg-danger">Not Happy</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ query.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>
+                                <button class="btn btn-info btn-sm" onclick="viewQuery({{ query.id }}, '{{ query.question|replace("'", "\\'") }}', {{ query.answer_found|tojson }}, {{ query.happy|tojson }})">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteQuery({{ query.id }})">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- View Query Modal -->
+<div class="modal fade" id="viewQueryModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Query Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <h6>Question</h6>
+                    <p id="queryQuestion" class="text-muted"></p>
+                </div>
+                <div class="mb-3">
+                    <h6>Answer Found</h6>
+                    <p id="queryAnswerFound" class="text-muted"></p>
+                </div>
+                <div class="mb-3">
+                    <h6>User Feedback</h6>
+                    <p id="queryFeedback" class="text-muted"></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function viewQuery(id, question, answerFound, happy) {
+    document.getElementById('queryQuestion').textContent = question;
+    document.getElementById('queryAnswerFound').textContent = answerFound ? 'Yes' : 'No';
+    document.getElementById('queryFeedback').textContent = happy ? 'Happy' : 'Not Happy';
+    new bootstrap.Modal(document.getElementById('viewQueryModal')).show();
+}
+
+function deleteQuery(id) {
+    if (confirm('Are you sure you want to delete this query?')) {
+        fetch(`/api/query/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        }).then(response => response.json())
+        .then(data => {
+            if (data.type === 'success') {
+                toastr.success(data.message);
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                toastr.error(data.message);
+            }
+        })
+        .catch(error => {
+            toastr.error('An error occurred while deleting the query');
+        });
+    }
+}
+</script>
+{% endblock %} 

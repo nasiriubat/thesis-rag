@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Admin Dashboard{% endblock %} - {{ settings.get('logo', 'ChatBot') }}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    <style>
+        .sidebar {
+            min-height: 100vh;
+            background-color: #4e73df;
+            background-image: linear-gradient(180deg, #4e73df 10%, #224abe 100%);
+            background-size: cover;
+        }
+        .sidebar .nav-link {
+            color: rgba(255, 255, 255, 0.8);
+            padding: 1rem;
+            font-weight: 500;
+        }
+        .sidebar .nav-link:hover {
+            color: #fff;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .sidebar .nav-link.active {
+            color: #fff;
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        .sidebar .nav-link i {
+            margin-right: 0.5rem;
+        }
+        .topbar {
+            height: 4.375rem;
+            box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+        }
+        .content-wrapper {
+            min-height: calc(100vh - 4.375rem);
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="d-flex">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="text-center py-4">
+                <h4 class="text-white">{{ settings.get('logo', 'ChatBot') }}</h4>
+            </div>
+            <div class="nav flex-column">
+                <a href="{{ url_for('admin_dashboard') }}" class="nav-link {% if request.endpoint == 'admin_dashboard' %}active{% endif %}">
+                    <i class="fas fa-tachometer-alt"></i>Dashboard
+                </a>
+                <a href="{{ url_for('admin_profile') }}" class="nav-link {% if request.endpoint == 'admin_profile' %}active{% endif %}">
+                    <i class="fas fa-user"></i>Profile
+                </a>
+                <a href="{{ url_for('admin_roles') }}" class="nav-link {% if request.endpoint == 'admin_roles' %}active{% endif %}">
+                    <i class="fas fa-user-tag"></i>Roles
+                </a>
+                <a href="{{ url_for('admin_users') }}" class="nav-link {% if request.endpoint == 'admin_users' %}active{% endif %}">
+                    <i class="fas fa-users"></i>Users
+                </a>
+                <a href="{{ url_for('admin_faqs') }}" class="nav-link {% if request.endpoint == 'admin_faqs' %}active{% endif %}">
+                    <i class="fas fa-question-circle"></i>FAQs
+                </a>
+                <a href="{{ url_for('admin_new_questions') }}" class="nav-link {% if request.endpoint == 'admin_new_questions' %}active{% endif %}">
+                    <i class="fas fa-question"></i>New Questions
+                </a>
+                <a href="{{ url_for('admin_files') }}" class="nav-link {% if request.endpoint == 'admin_files' %}active{% endif %}">
+                    <i class="fas fa-file"></i>Files
+                </a>
+                <a href="{{ url_for('admin_queries') }}" class="nav-link {% if request.endpoint == 'admin_queries' %}active{% endif %}">
+                    <i class="fas fa-search"></i>Queries
+                </a>
+                <a href="{{ url_for('admin_settings') }}" class="nav-link {% if request.endpoint == 'admin_settings' %}active{% endif %}">
+                    <i class="fas fa-cog"></i>Settings
+                </a>
+                <a href="{{ url_for('admin_logout') }}" class="nav-link text-danger">
+                    <i class="fas fa-sign-out-alt"></i>Logout
+                </a>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-grow-1">
+            <!-- Topbar -->
+            <nav class="navbar navbar-expand navbar-light bg-white topbar mb-4 static-top shadow">
+                <div class="container-fluid">
+                    <span class="navbar-brand mb-0 h1">{{ settings.get('logo', 'ChatBot') }} Admin</span>
+                    <div class="d-flex align-items-center">
+                        <span class="me-3">Welcome, {{ current_user.name }}</span>
+                        <a href="{{ url_for('admin_logout') }}" class="btn btn-outline-danger btn-sm">
+                            <i class="fas fa-sign-out-alt"></i> Logout
+                        </a>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Content -->
+            <div class="content-wrapper">
+                {% block content %}{% endblock %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html> 

@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <h1 class="mb-4">Contact Us</h1>
+            <div class="card">
+                <div class="card-body">
+                    {{ settings.get('contact', '')|safe }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Footer -->
+<footer class="bg-light py-3 mt-auto">
+    <div class="container text-center">
+        <p class="mb-0">{{ settings.get('copyright', '') }}</p>
+    </div>
+</footer>
+{% endblock %} 

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <!-- Sidebar -->
+        <div class="col-md-3 col-lg-2 sidebar">
+            <h3 class="mb-4">{{ settings.get('logo', 'ChatBot') }}</h3>
+            <div class="nav flex-column">
+                <a href="{{ url_for('admin_dashboard') }}" class="nav-link">
+                    <i class="fas fa-tachometer-alt me-2"></i>Dashboard
+                </a>
+                <a href="{{ url_for('admin_profile') }}" class="nav-link active">
+                    <i class="fas fa-user me-2"></i>Profile
+                </a>
+                <a href="{{ url_for('admin_roles') }}" class="nav-link">
+                    <i class="fas fa-user-tag me-2"></i>Roles
+                </a>
+                <a href="{{ url_for('admin_users') }}" class="nav-link">
+                    <i class="fas fa-users me-2"></i>Users
+                </a>
+                <a href="{{ url_for('admin_faqs') }}" class="nav-link">
+                    <i class="fas fa-question-circle me-2"></i>FAQs
+                </a>
+                <a href="{{ url_for('admin_files') }}" class="nav-link">
+                    <i class="fas fa-file me-2"></i>Files
+                </a>
+                <a href="{{ url_for('admin_queries') }}" class="nav-link">
+                    <i class="fas fa-search me-2"></i>Queries
+                </a>
+                <a href="{{ url_for('admin_settings') }}" class="nav-link">
+                    <i class="fas fa-cog me-2"></i>Settings
+                </a>
+                <a href="{{ url_for('admin_logout') }}" class="nav-link text-danger">
+                    <i class="fas fa-sign-out-alt me-2"></i>Logout
+                </a>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="col-md-9 col-lg-10 main-area">
+            <h2 class="mb-4">Profile Settings</h2>
+            
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-success">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('admin_profile') }}">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Name</label>
+                            <input type="text" class="form-control" id="name" name="name" 
+                                   value="{{ current_user.name }}" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" 
+                                   value="{{ current_user.email }}" readonly>
+                            <small class="text-muted">Email cannot be changed</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="phone" class="form-label">Phone Number</label>
+                            <input type="tel" class="form-control" id="phone" name="phone" 
+                                   value="{{ current_user.phone }}">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="password" class="form-label">New Password</label>
+                            <input type="password" class="form-control" id="password" name="password">
+                            <small class="text-muted">Leave blank to keep current password</small>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-2"></i>Save Changes
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

@@ -1,0 +1,122 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">New Questions</h1>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <script>
+                    toastr.{{ category }}('{{ message }}');
+                </script>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Unanswered Questions</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Question</th>
+                            <th>Created At</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for question in new_questions %}
+                        <tr>
+                            <td>{{ question.id }}</td>
+                            <td>{{ question.question }}</td>
+                            <td>{{ question.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>
+                                <button class="btn btn-primary btn-sm" onclick="answerQuestion({{ question.id }}, '{{ question.question|replace("'", "\\'") }}')">
+                                    <i class="fas fa-reply"></i> Answer
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Answer Question Modal -->
+<div class="modal fade" id="answerQuestionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Answer Question</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="answerQuestionForm" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Question</label>
+                        <p id="questionText" class="form-control-plaintext"></p>
+                    </div>
+                    <div class="mb-3">
+                        <label for="answer" class="form-label">Answer</label>
+                        <textarea class="form-control" id="answer" name="answer" rows="5" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="ai" name="ai">
+                            <label class="form-check-label" for="ai">
+                                AI Generated
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Save Answer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function answerQuestion(id, question) {
+    const form = document.getElementById('answerQuestionForm');
+    form.action = `/api/new-question/${id}/answer`;
+    document.getElementById('questionText').textContent = question;
+    document.getElementById('answer').value = '';
+    document.getElementById('ai').checked = false;
+    new bootstrap.Modal(document.getElementById('answerQuestionModal')).show();
+}
+
+// Handle form submission
+document.getElementById('answerQuestionForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    
+    fetch(this.action, {
+        method: 'POST',
+        body: formData
+    }).then(response => response.json())
+    .then(data => {
+        if (data.type === 'success') {
+            toastr.success(data.message);
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            toastr.error(data.message);
+        }
+    })
+    .catch(error => {
+        toastr.error('An error occurred while saving the answer');
+    });
+});
+</script>
+{% endblock %} 

@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <!-- Sidebar -->
+        <div class="col-md-3 col-lg-2 sidebar">
+            <div class="text-center py-4">
+                <h4 class="text-white">{{ settings.get('logo', 'ChatBot') }}</h4>
+            </div>
+            <div class="nav flex-column">
+                <a href="{{ url_for('index') }}" class="nav-link active">
+                    <i class="fas fa-home"></i>Home
+                </a>
+                <a href="{{ url_for('about') }}" class="nav-link">
+                    <i class="fas fa-info-circle"></i>About
+                </a>
+                <a href="{{ url_for('contact') }}" class="nav-link">
+                    <i class="fas fa-envelope"></i>Contact
+                </a>
+            </div>
+            
+            <!-- FAQ List -->
+            <div class="mt-4">
+                <h6 class="text-white px-3">Frequently Asked Questions</h6>
+                <div class="nav flex-column">
+                    {% for faq in faqs %}
+                    <a href="#" class="nav-link text-white-50" onclick="askQuestion('{{ faq.question|replace("'", "\\'") }}')">
+                        <i class="fas fa-question-circle"></i>{{ faq.question[:50] }}...
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Area -->
+        <div class="col-md-9 col-lg-10 main-area">
+            <!-- Initial FAQ Cards -->
+            <div id="faqCards" class="row">
+                <div class="col-12 mb-4">
+                    <div class="card">
+                        <div class="card-body text-center">
+                            <h3 class="card-title">Welcome to {{ settings.get('logo', 'ChatBot') }}</h3>
+                            <p class="card-text">Ask me anything or browse through our frequently asked questions below.</p>
+                            <button class="btn btn-primary" onclick="startChat()">
+                                <i class="fas fa-comments"></i> Start Chat
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% for faq in faqs %}
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">{{ faq.question }}</h5>
+                            <p class="card-text">{{ faq.answer }}</p>
+                            <button class="btn btn-outline-primary btn-sm" onclick="askQuestion('{{ faq.question|replace("'", "\\'") }}')">
+                                <i class="fas fa-comments"></i> Ask This
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Chat Interface (Initially Hidden) -->
+            <div id="chatInterface" class="d-none">
+                <div class="card">
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-comments"></i> Chat
+                        </h5>
+                        <button class="btn btn-sm btn-light" onclick="showFaqCards()">
+                            <i class="fas fa-arrow-left"></i> Back to FAQs
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="chatMessages" class="mb-4" style="height: 400px; overflow-y: auto;">
+                            <!-- Welcome message will be added here -->
+                        </div>
+                        <form id="chatForm" class="d-flex">
+                            <input type="text" id="question" class="form-control me-2" placeholder="Type your question here..." autocomplete="off">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Footer -->
+<footer class="bg-light py-3 mt-auto">
+    <div class="container text-center">
+        <p class="mb-0">{{ settings.get('copyright', '') }}</p>
+    </div>
+</footer>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Initialize chat with welcome message
+function startChat() {
+    document.getElementById('faqCards').classList.add('d-none');
+    document.getElementById('chatInterface').classList.remove('d-none');
+    addMessage('Hello! I\'m your AI assistant. How can I help you today?', 'bot');
+    document.getElementById('question').focus();
+}
+
+// Show FAQ cards
+function showFaqCards() {
+    document.getElementById('chatInterface').classList.add('d-none');
+    document.getElementById('faqCards').classList.remove('d-none');
+}
+
+// Show chat interface when user interacts with input
+document.getElementById('question').addEventListener('focus', function() {
+    if (document.getElementById('chatInterface').classList.contains('d-none')) {
+        startChat();
+    }
+});
+
+// Function to ask a question from FAQ list
+function askQuestion(question) {
+    document.getElementById('question').value = question;
+    if (document.getElementById('chatInterface').classList.contains('d-none')) {
+        startChat();
+    }
+    document.getElementById('chatForm').dispatchEvent(new Event('submit'));
+}
+
+// Handle form submission
+document.getElementById('chatForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const question = document.getElementById('question').value;
+    if (!question) return;
+
+    // Add user message
+    addMessage(question, 'user');
+    document.getElementById('question').value = '';
+
+    // Show loading state
+    const loadingId = addMessage('Thinking...', 'bot', true);
+
+    // Send to backend
+    fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ question: question })
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Remove loading message
+        document.getElementById(loadingId).remove();
+        
+        // Add bot response
+        addMessage(data.answer, 'bot');
+        
+        // Show sources if available
+        if (data.sources && data.sources.length > 0) {
+            const sourcesHtml = data.sources.map(source => 
+                `<div class="source-item">
+                    <small class="text-muted">Source: ${source.text}</small>
+                </div>`
+            ).join('');
+            addMessage(`<div class="sources">${sourcesHtml}</div>`, 'bot');
+        }
+        
+        // Show error message if any
+        if (data.type === 'error') {
+            toastr.error(data.answer);
+        } else if (data.type === 'info') {
+            toastr.info(data.answer);
+        }
+    })
+    .catch(error => {
+        document.getElementById(loadingId).remove();
+        addMessage('Sorry, an error occurred. Please try again.', 'bot');
+        toastr.error('An error occurred while processing your question');
+    });
+});
+
+// Function to add a message to the chat
+function addMessage(text, sender, isTemporary = false) {
+    const messagesDiv = document.getElementById('chatMessages');
+    const messageDiv = document.createElement('div');
+    const messageId = 'msg-' + Date.now();
+    messageDiv.id = messageId;
+    messageDiv.className = `message ${sender}-message ${isTemporary ? 'temporary' : ''}`;
+    messageDiv.innerHTML = `
+        <div class="message-content">
+            <div class="message-text">${text}</div>
+            <div class="message-time">${new Date().toLocaleTimeString()}</div>
+        </div>
+    `;
+    messagesDiv.appendChild(messageDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    return messageId;
+}
+
+// Handle Enter key in chat input
+document.getElementById('question').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        document.getElementById('chatForm').dispatchEvent(new Event('submit'));
+    }
+});
+</script>
+
+<style>
+.message {
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.user-message {
+    align-items: flex-end;
+}
+
+.bot-message {
+    align-items: flex-start;
+}
+
+.message-content {
+    max-width: 80%;
+    padding: 0.75rem;
+    border-radius: 1rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.user-message .message-content {
+    background-color: #007bff;
+    color: white;
+}
+
+.bot-message .message-content {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+}
+
+.message-time {
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+    opacity: 0.7;
+}
+
+.temporary {
+    opacity: 0.7;
+    font-style: italic;
+}
+
+.sources {
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+}
+
+.source-item {
+    padding: 0.5rem;
+    background-color: #f8f9fa;
+    border-radius: 0.5rem;
+    margin-bottom: 0.5rem;
+    border: 1px solid #dee2e6;
+}
+
+.sidebar {
+    min-height: 100vh;
+    background-color: #4e73df;
+    background-image: linear-gradient(180deg, #4e73df 10%, #224abe 100%);
+    background-size: cover;
+}
+
+.sidebar .nav-link {
+    color: rgba(255, 255, 255, 0.8);
+    padding: 1rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.sidebar .nav-link:hover {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.1);
+    transform: translateX(5px);
+}
+
+.sidebar .nav-link.active {
+    color: #fff;
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.sidebar .nav-link i {
+    margin-right: 0.5rem;
+}
+
+.card {
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+#chatMessages::-webkit-scrollbar {
+    width: 6px;
+}
+
+#chatMessages::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+#chatMessages::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 3px;
+}
+
+#chatMessages::-webkit-scrollbar-thumb:hover {
+    background: #555;
+}
+</style>
+{% endblock %} 

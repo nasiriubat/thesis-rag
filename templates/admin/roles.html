@@ -1,0 +1,179 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">Role Management</h1>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <script>
+                    toastr.{{ category }}('{{ message }}');
+                </script>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">Roles</h6>
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addRoleModal">
+                <i class="fas fa-plus"></i> Add Role
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Users</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for role in roles %}
+                        <tr>
+                            <td>{{ role.id }}</td>
+                            <td>{{ role.name }}</td>
+                            <td>{{ role.users|length }}</td>
+                            <td>
+                                <button class="btn btn-info btn-sm" onclick="editRole({{ role.id }}, '{{ role.name }}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteRole({{ role.id }})">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Role Modal -->
+<div class="modal fade" id="addRoleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add New Role</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="addRoleForm" method="POST" action="{{ url_for('api_create_role') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="roleName" class="form-label">Role Name</label>
+                        <input type="text" class="form-control" id="roleName" name="name" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Add Role</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Role Modal -->
+<div class="modal fade" id="editRoleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Role</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editRoleForm" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="editRoleName" class="form-label">Role Name</label>
+                        <input type="text" class="form-control" id="editRoleName" name="name" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function editRole(id, name) {
+    const form = document.getElementById('editRoleForm');
+    form.action = `/api/role/${id}`;
+    document.getElementById('editRoleName').value = name;
+    new bootstrap.Modal(document.getElementById('editRoleModal')).show();
+}
+
+function deleteRole(id) {
+    if (confirm('Are you sure you want to delete this role?')) {
+        fetch(`/api/role/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        }).then(response => response.json())
+        .then(data => {
+            if (data.type === 'success') {
+                toastr.success(data.message);
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                toastr.error(data.message);
+            }
+        })
+        .catch(error => {
+            toastr.error('An error occurred while deleting the role');
+        });
+    }
+}
+
+// Handle form submissions
+document.getElementById('addRoleForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    fetch(this.action, {
+        method: 'POST',
+        body: formData
+    }).then(response => response.json())
+    .then(data => {
+        if (data.type === 'success') {
+            toastr.success(data.message);
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            toastr.error(data.message);
+        }
+    })
+    .catch(error => {
+        toastr.error('An error occurred while creating the role');
+    });
+});
+
+document.getElementById('editRoleForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    fetch(this.action, {
+        method: 'PUT',
+        body: formData
+    }).then(response => response.json())
+    .then(data => {
+        if (data.type === 'success') {
+            toastr.success(data.message);
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            toastr.error(data.message);
+        }
+    })
+    .catch(error => {
+        toastr.error('An error occurred while updating the role');
+    });
+});
+</script>
+{% endblock %} 

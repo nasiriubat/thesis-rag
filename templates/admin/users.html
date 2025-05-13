@@ -1,0 +1,231 @@
+{% extends "admin/base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="h3 mb-4 text-gray-800">User Management</h1>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <script>
+                    toastr.{{ category }}('{{ message }}');
+                </script>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 font-weight-bold text-primary">Users</h6>
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addUserModal">
+                <i class="fas fa-plus"></i> Add User
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Role</th>
+                            <th>Created At</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td>{{ user.id }}</td>
+                            <td>{{ user.name }}</td>
+                            <td>{{ user.email }}</td>
+                            <td>{{ user.phone or '-' }}</td>
+                            <td>{{ user.role.name if user.role else '-' }}</td>
+                            <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>
+                                <button class="btn btn-info btn-sm" onclick="editUser({{ user.id }}, '{{ user.name }}', '{{ user.email }}', '{{ user.phone or '' }}', {{ user.role_id or 'null' }})">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteUser({{ user.id }})">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add User Modal -->
+<div class="modal fade" id="addUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add New User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="addUserForm" method="POST" action="{{ url_for('api_create_user') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="userName" class="form-label">Name</label>
+                        <input type="text" class="form-control" id="userName" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="userEmail" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="userEmail" name="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="userPhone" class="form-label">Phone</label>
+                        <input type="tel" class="form-control" id="userPhone" name="phone">
+                    </div>
+                    <div class="mb-3">
+                        <label for="userPassword" class="form-label">Password</label>
+                        <input type="password" class="form-control" id="userPassword" name="password" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="userRole" class="form-label">Role</label>
+                        <select class="form-select" id="userRole" name="role_id">
+                            <option value="">Select Role</option>
+                            {% for role in roles %}
+                            <option value="{{ role.id }}">{{ role.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Add User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit User Modal -->
+<div class="modal fade" id="editUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editUserForm" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="editUserName" class="form-label">Name</label>
+                        <input type="text" class="form-control" id="editUserName" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editUserEmail" class="form-label">Email</label>
+                        <input type="email" class="form-control" id="editUserEmail" name="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editUserPhone" class="form-label">Phone</label>
+                        <input type="tel" class="form-control" id="editUserPhone" name="phone">
+                    </div>
+                    <div class="mb-3">
+                        <label for="editUserPassword" class="form-label">New Password</label>
+                        <input type="password" class="form-control" id="editUserPassword" name="password">
+                        <small class="text-muted">Leave blank to keep current password</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="editUserRole" class="form-label">Role</label>
+                        <select class="form-select" id="editUserRole" name="role_id">
+                            <option value="">Select Role</option>
+                            {% for role in roles %}
+                            <option value="{{ role.id }}">{{ role.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function editUser(id, name, email, phone, roleId) {
+    const form = document.getElementById('editUserForm');
+    form.action = `/api/user/${id}`;
+    document.getElementById('editUserName').value = name;
+    document.getElementById('editUserEmail').value = email;
+    document.getElementById('editUserPhone').value = phone;
+    document.getElementById('editUserRole').value = roleId || '';
+    new bootstrap.Modal(document.getElementById('editUserModal')).show();
+}
+
+function deleteUser(id) {
+    if (confirm('Are you sure you want to delete this user?')) {
+        fetch(`/api/user/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        }).then(response => response.json())
+        .then(data => {
+            if (data.type === 'success') {
+                toastr.success(data.message);
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                toastr.error(data.message);
+            }
+        })
+        .catch(error => {
+            toastr.error('An error occurred while deleting the user');
+        });
+    }
+}
+
+// Handle form submissions
+document.getElementById('addUserForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    fetch(this.action, {
+        method: 'POST',
+        body: formData
+    }).then(response => response.json())
+    .then(data => {
+        if (data.type === 'success') {
+            toastr.success(data.message);
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            toastr.error(data.message);
+        }
+    })
+    .catch(error => {
+        toastr.error('An error occurred while creating the user');
+    });
+});
+
+document.getElementById('editUserForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    fetch(this.action, {
+        method: 'PUT',
+        body: formData
+    }).then(response => response.json())
+    .then(data => {
+        if (data.type === 'success') {
+            toastr.success(data.message);
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            toastr.error(data.message);
+        }
+    })
+    .catch(error => {
+        toastr.error('An error occurred while updating the user');
+    });
+});
+</script>
+{% endblock %} 
