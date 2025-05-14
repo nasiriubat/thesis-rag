@@ -7,9 +7,20 @@
         <div class="container-fluid">
             <div class="d-flex justify-content-between align-items-center">
                 <h2 class="navbar-logo mb-0">{{ settings.get('logo', 'Guide GPT') }}</h2>
-                <div>
-                    <a href="{{ url_for('main.about') }}" class="btn btn-icon visitor-info-btn me-2" title="About"><i class="fas fa-info-circle"></i></a>
-                    <a href="{{ url_for('main.contact') }}" class="btn btn-icon visitor-info-btn" title="Contact"><i class="fas fa-envelope"></i></a>
+                <div class="d-flex align-items-center">
+                    <!-- Language Toggle -->
+                    <div class="language-toggle me-3">
+                        <div class="toggle-switch">
+                            <input type="checkbox" id="languageToggle" class="toggle-input" onchange="toggleLanguage()">
+                            <label for="languageToggle" class="toggle-label">
+                                <span class="toggle-text-en">EN</span>
+                                <span class="toggle-text-fi">FI</span>
+                                <span class="toggle-handle"></span>
+                            </label>
+                        </div>
+                    </div>
+                    <a href="{{ url_for('main.about') }}" class="btn btn-icon visitor-info-btn me-2" title="About" data-translate="about"><i class="fas fa-info-circle"></i></a>
+                    <a href="{{ url_for('main.contact') }}" class="btn btn-icon visitor-info-btn" title="Contact" data-translate="contact"><i class="fas fa-envelope"></i></a>
                 </div>
             </div>
         </div>
@@ -21,7 +32,7 @@
             <!-- Sidebar -->
             <div class="visitor-sidebar flex-shrink-0">
                 <div class="sidebar-header py-4 text-center">
-                    <h3 class="sidebar-title mb-3">FAQ</h3>
+                    <h3 class="sidebar-title mb-3" data-translate="faq">FAQ</h3>
                     <hr class="sidebar-divider">
                 </div>
               
@@ -35,7 +46,7 @@
                         {% endfor %}
                     </ul>
                     {% else %}
-                    <div class="text-center text-muted">No FAQs found</div>
+                    <div class="text-center text-muted" data-translate="noFaqsFound">No FAQs found</div>
                     {% endif %}
                 </div>
             </div>
@@ -59,7 +70,7 @@
 
                     <!-- Input -->
                     <form id="chatForm" class="visitor-chat-form d-flex align-items-center">
-                        <input type="text" id="question" class="form-control visitor-chat-input" placeholder="Type your message here..." autocomplete="off">
+                        <input type="text" id="question" class="form-control visitor-chat-input" data-translate-placeholder="typeMessage" placeholder="Type your message here..." autocomplete="off">
                         <button type="submit" class="btn visitor-send-btn ms-2"><i class="fas fa-paper-plane"></i></button>
                     </form>
                 </div>
@@ -75,7 +86,24 @@
 {% endblock %}
 
 {% block extra_js %}
+<!-- Add language.js before other scripts -->
+<script src="{{ url_for('static', filename='js/languages.js') }}"></script>
 <script>
+let currentLanguage = initializeLanguage();
+
+function toggleLanguage() {
+    currentLanguage = currentLanguage === 'en' ? 'fi' : 'en';
+    updateTranslations(currentLanguage);
+    // Update toggle state
+    document.getElementById('languageToggle').checked = currentLanguage === 'fi';
+}
+
+// Initialize toggle state
+document.addEventListener('DOMContentLoaded', function() {
+    const savedLanguage = localStorage.getItem('selectedLanguage') || 'en';
+    document.getElementById('languageToggle').checked = savedLanguage === 'fi';
+});
+
 // Function to ask a question from FAQ list or quick button
 function askQuestion(question) {
     // Hide initial FAQs if they are visible
@@ -88,7 +116,7 @@ function askQuestion(question) {
     addMessage(question, 'user');
     
     // Show loading message
-    const loadingId = addMessage('Thinking...', 'bot', true);
+    const loadingId = addMessage(getTranslation('thinking', currentLanguage), 'bot', true);
     
     // Send request to server
     fetch('/api/chat', {
@@ -107,7 +135,7 @@ function askQuestion(question) {
         // Add sources if available
         if (data.sources && data.sources.length > 0) {
             const sourcesHtml = data.sources.map(source =>
-                `<div class='source-item'><small class='text-muted'>Source: ${source.text}</small></div>`
+                `<div class='source-item'><small class='text-muted'>${getTranslation('source', currentLanguage)} ${source.text}</small></div>`
             ).join('');
             addMessage(`<div class='sources'>${sourcesHtml}</div>`, 'bot');
         }
@@ -124,26 +152,10 @@ function askQuestion(question) {
         document.getElementById(loadingId).remove();
         
         // Show error message
-        addMessage('Sorry, an error occurred. Please try again.', 'bot');
-        toastr.error('An error occurred while processing your question');
+        addMessage(getTranslation('sorryError', currentLanguage), 'bot');
+        toastr.error(getTranslation('errorOccurred', currentLanguage));
     });
 }
-
-// Handle form submission
-const chatForm = document.getElementById('chatForm');
-const chatMessages = document.getElementById('chatMessages');
-
-chatForm.addEventListener('submit', function(e) {
-    e.preventDefault();
-    const question = document.getElementById('question').value;
-    if (!question) return;
-    
-    // Use the same askQuestion function for form submission
-    askQuestion(question);
-    
-    // Clear input field after sending
-    document.getElementById('question').value = '';
-});
 
 function addMessage(text, sender, isTemporary = false) {
     const messageDiv = document.createElement('div');
@@ -158,10 +170,10 @@ function addMessage(text, sender, isTemporary = false) {
         content += `
             <div class="feedback-buttons mt-2">
                 <button class="btn btn-sm btn-outline-success me-2" onclick="submitFeedback(${messageId}, 'like')">
-                    <i class="fas fa-thumbs-up"></i> Helpful
+                    <i class="fas fa-thumbs-up"></i> ${getTranslation('helpful', currentLanguage)}
                 </button>
                 <button class="btn btn-sm btn-outline-danger" onclick="submitFeedback(${messageId}, 'dislike')">
-                    <i class="fas fa-thumbs-down"></i> Not Helpful
+                    <i class="fas fa-thumbs-down"></i> ${getTranslation('notHelpful', currentLanguage)}
                 </button>
             </div>
         `;
@@ -188,21 +200,37 @@ function submitFeedback(messageId, feedback) {
     .then(response => response.json())
     .then(data => {
         if (data.message) {
-            toastr.success('Thank you for your feedback!');
+            toastr.success(getTranslation('thankYouFeedback', currentLanguage));
             // Disable feedback buttons after submission
             const feedbackButtons = document.querySelector(`#${messageId} .feedback-buttons`);
             if (feedbackButtons) {
-                feedbackButtons.innerHTML = '<small class="text-muted">Feedback recorded</small>';
+                feedbackButtons.innerHTML = `<small class="text-muted">${getTranslation('feedbackRecorded', currentLanguage)}</small>`;
             }
         } else {
-            toastr.error(data.error || 'Failed to record feedback');
+            toastr.error(data.error || getTranslation('failedFeedback', currentLanguage));
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        toastr.error('An error occurred while submitting feedback');
+        toastr.error(getTranslation('errorFeedback', currentLanguage));
     });
 }
+
+// Handle form submission
+const chatForm = document.getElementById('chatForm');
+const chatMessages = document.getElementById('chatMessages');
+
+chatForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const question = document.getElementById('question').value;
+    if (!question) return;
+    
+    // Use the same askQuestion function for form submission
+    askQuestion(question);
+    
+    // Clear input field after sending
+    document.getElementById('question').value = '';
+});
 
 // Handle Enter key in chat input
 document.getElementById('question').addEventListener('keypress', function(e) {
@@ -480,6 +508,98 @@ html, body {
 
 .bot-message .feedback-buttons {
     margin-left: 0.5rem;
+}
+
+.language-toggle {
+    position: relative;
+    margin-right: 1rem;
+}
+
+.toggle-switch {
+    position: relative;
+    width: 80px;
+    height: 32px;
+}
+
+.toggle-input {
+    display: none;
+}
+
+.toggle-label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.toggle-text-en,
+.toggle-text-fi {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    transition: all 0.3s ease;
+    color: #fff;
+}
+
+.toggle-text-en {
+    left: 12px;
+}
+
+.toggle-text-fi {
+    right: 12px;
+}
+
+.toggle-handle {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 24px;
+    height: 24px;
+    background: #fff;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-input:checked + .toggle-label {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.toggle-input:checked + .toggle-label .toggle-handle {
+    left: calc(100% - 28px);
+}
+
+.toggle-input:checked + .toggle-label .toggle-text-en {
+    opacity: 0.5;
+}
+
+.toggle-input:checked + .toggle-label .toggle-text-fi {
+    opacity: 1;
+}
+
+.toggle-input:not(:checked) + .toggle-label .toggle-text-en {
+    opacity: 1;
+}
+
+.toggle-input:not(:checked) + .toggle-label .toggle-text-fi {
+    opacity: 0.5;
+}
+
+.toggle-label:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.toggle-label:hover .toggle-handle {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 </style>
 {% endblock %} 
