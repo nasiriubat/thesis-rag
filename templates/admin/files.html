@@ -31,6 +31,7 @@
                     <thead>
                         <tr>
                             <th>ID</th>
+                            <th>File Name</th>
                             <th>Content Preview</th>
                             <th>Uploaded By</th>
                             <th>Created At</th>
@@ -39,10 +40,10 @@
                     </thead>
                     <tbody>
                         {% for file in files %}
-                    
                         <tr data-file-id="{{ file.id }}">
-                            <td>{{ file.id }}</td>
-                            <td>{{ file.text[:100] }}{% if file.text|length > 100 %}...{% endif %}</td>
+                            <td>{{ loop.index }}</td>
+                            <td>{{ file.original_filename }}</td>
+                            <td>{{ file.text[:30] }}{% if file.text|length > 30 %}...{% endif %}</td>
                             <td>{{ file.user.name }}</td>
                             <td>{{ file.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                             <td>

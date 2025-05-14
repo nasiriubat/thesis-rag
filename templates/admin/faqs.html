@@ -36,7 +36,7 @@
                     <tbody>
                         {% for faq in faqs %}
                         <tr>
-                            <td>{{ faq.id }}</td>
+                            <td>{{ loop.index }}</td>
                             <td>{{ faq.question[:100] }}{% if faq.question|length > 100 %}...{% endif %}</td>
                             <td>{{ faq.answer[:100] }}{% if faq.answer|length > 100 %}...{% endif %}</td>
                             <td>{{ faq.created_at.strftime('%Y-%m-%d %H:%M') }}</td>

@@ -37,7 +37,7 @@
                     <tbody>
                         {% for query in queries %}
                         <tr>
-                            <td>{{ query.id }}</td>
+                            <td>{{ loop.index }}</td>
                             <td>{{ query.question[:100] }}{% if query.question|length > 100 %}...{% endif %}</td>
                             <td>
                                 {% if query.answer_found %}

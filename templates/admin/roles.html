@@ -35,7 +35,7 @@
                     <tbody>
                         {% for role in roles %}
                         <tr>
-                            <td>{{ role.id }}</td>
+                            <td>{{ loop.index }}</td>
                             <td>{{ role.name }}</td>
                             <td>{{ role.users|length }}</td>
                             <td>

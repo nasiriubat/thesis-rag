@@ -71,11 +71,11 @@
                     <div class="row no-gutters align-items-center">
                         <div class="col mr-2">
                             <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                                Total Queries</div>
-                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ queries|length }}</div>
+                                New Questions</div>
+                            <div class="h5 mb-0 font-weight-bold text-gray-800">{{ new_questions|length }}</div>
                         </div>
                         <div class="col-auto">
-                            <i class="fas fa-comments fa-2x text-gray-300"></i>
+                            <i class="fas fa-question fa-2x text-gray-300"></i>
                         </div>
                     </div>
                 </div>
@@ -85,11 +85,14 @@
 
     <!-- Recent Activity -->
     <div class="row">
-        <!-- Recent Queries -->
+        <!-- Recent New Questions -->
         <div class="col-lg-6 mb-4">
             <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Recent Queries</h6>
+                <div class="card-header py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="m-0 font-weight-bold text-primary">Recent New Questions</h6>
+                    <a href="{{ url_for('main.admin_new_questions') }}" class="btn btn-primary btn-sm">
+                        <i class="fas fa-external-link-alt"></i> View All
+                    </a>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
@@ -97,22 +100,20 @@
                             <thead>
                                 <tr>
                                     <th>Question</th>
-                                    <th>Answer Found</th>
                                     <th>Date</th>
+                                    <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for query in queries[-5:]|reverse %}
+                                {% for question in new_questions[:5] %}
                                 <tr>
-                                    <td>{{ query.question[:50] }}...</td>
+                                    <td>{{ question.question[:50] }}...</td>
+                                    <td>{{ question.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                                     <td>
-                                        {% if query.answer_found %}
-                                        <span class="badge bg-success">Yes</span>
-                                        {% else %}
-                                        <span class="badge bg-danger">No</span>
-                                        {% endif %}
+                                        <button class="btn btn-primary btn-sm" onclick="answerQuestion({{ question.id }}, '{{ question.question|replace("'", "\\'") }}')">
+                                            <i class="fas fa-reply"></i> Answer
+                                        </button>
                                     </td>
-                                    <td>{{ query.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -154,4 +155,83 @@
         </div>
     </div>
 </div>
+
+<!-- Answer Question Modal -->
+<div class="modal fade" id="answerQuestionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Answer Question</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="answerQuestionForm" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Question</label>
+                        <p id="questionText" class="form-control-plaintext"></p>
+                    </div>
+                    <div class="mb-3">
+                        <label for="answer" class="form-label">Answer</label>
+                        <textarea class="form-control" id="answer" name="answer" rows="5" required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Save Answer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function answerQuestion(id, question) {
+    const form = document.getElementById('answerQuestionForm');
+    form.action = `/api/new-question/${id}/answer`;
+    document.getElementById('questionText').textContent = question;
+    new bootstrap.Modal(document.getElementById('answerQuestionModal')).show();
+}
+
+// Handle form submission
+document.getElementById('answerQuestionForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    
+    // Show loading state
+    const submitButton = this.querySelector('button[type="submit"]');
+    const originalButtonText = submitButton.innerHTML;
+    submitButton.disabled = true;
+    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+    fetch(this.action, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.type === 'success') {
+            // Close the modal first
+            const modal = bootstrap.Modal.getInstance(document.getElementById('answerQuestionModal'));
+            modal.hide();
+            
+            toastr.success(data.message);
+            // Reload the page after a short delay
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            toastr.error(data.message);
+            // Reset button state
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalButtonText;
+        }
+    })
+    .catch(error => {
+        toastr.error('An error occurred while saving the answer');
+        // Reset button state
+        submitButton.disabled = false;
+        submitButton.innerHTML = originalButtonText;
+    });
+});
+</script>
 {% endblock %} 

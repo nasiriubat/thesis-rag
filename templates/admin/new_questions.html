@@ -32,7 +32,7 @@
                     <tbody>
                         {% for question in new_questions %}
                         <tr>
-                            <td>{{ question.id }}</td>
+                            <td>{{ loop.index }}</td>
                             <td>{{ question.question }}</td>
                             <td>{{ question.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                             <td>

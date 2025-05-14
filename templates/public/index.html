@@ -361,15 +361,23 @@ html, body {
     list-style: disc inside;
 }
 
+
 .faq-bullet-link {
+    display: inline-block;
+    transition: 
+        color 0.3s ease,
+        transform 0.3s ease,
+        font-size 0.3s ease,
+        text-shadow 0.3s ease;
     color: #5b1fa6;
+    font-size: 1rem;
     text-decoration: none;
-    transition: color 0.2s;
 }
 
 .faq-bullet-link:hover {
-    color: #3d136e;
-    text-decoration: underline;
+    color: #000000;
+    transform: translateY(4px); /* smoother, more common than translate */
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .visitor-main-bg {

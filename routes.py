@@ -224,14 +224,14 @@ def admin_dashboard():
     users = User.query.all()
     faqs = FAQ.query.all()
     files = File.query.all()
-    queries = Query.query.all()
+    new_questions = NewQuestion.query.order_by(NewQuestion.created_at.desc()).all()
     settings = {s.key: s.value for s in Settings.query.all()}
     return render_template(
         "admin/dashboard.html",
         users=users,
         faqs=faqs,
         files=files,
-        queries=queries,
+        new_questions=new_questions,
         settings=settings,
     )
 
