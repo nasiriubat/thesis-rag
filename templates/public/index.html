@@ -1,155 +1,99 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container-fluid">
-    <div class="row">
-        <!-- Sidebar -->
-        <div class="col-md-3 col-lg-2 sidebar">
-            <div class="text-center py-4">
-                <h4 class="text-white">{{ settings.get('logo', 'ChatBot') }}</h4>
-            </div>
-            <div class="nav flex-column">
-                <a href="{{ url_for('index') }}" class="nav-link active">
-                    <i class="fas fa-home"></i>Home
-                </a>
-                <a href="{{ url_for('about') }}" class="nav-link">
-                    <i class="fas fa-info-circle"></i>About
-                </a>
-                <a href="{{ url_for('contact') }}" class="nav-link">
-                    <i class="fas fa-envelope"></i>Contact
-                </a>
-            </div>
-            
-            <!-- FAQ List -->
-            <div class="mt-4">
-                <h6 class="text-white px-3">Frequently Asked Questions</h6>
-                <div class="nav flex-column">
-                    {% for faq in faqs %}
-                    <a href="#" class="nav-link text-white-50" onclick="askQuestion('{{ faq.question|replace("'", "\\'") }}')">
-                        <i class="fas fa-question-circle"></i>{{ faq.question[:50] }}...
-                    </a>
-                    {% endfor %}
+<div class="visitor-bg">
+    <!-- Navbar -->
+    <nav class="visitor-navbar">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center">
+                <h2 class="navbar-logo mb-0">{{ settings.get('logo', 'Guide GPT') }}</h2>
+                <div>
+                    <a href="{{ url_for('main.about') }}" class="btn btn-icon visitor-info-btn me-2" title="About"><i class="fas fa-info-circle"></i></a>
+                    <a href="{{ url_for('main.contact') }}" class="btn btn-icon visitor-info-btn" title="Contact"><i class="fas fa-envelope"></i></a>
                 </div>
             </div>
         </div>
+    </nav>
 
-        <!-- Main Area -->
-        <div class="col-md-9 col-lg-10 main-area">
-            <!-- Initial FAQ Cards -->
-            <div id="faqCards" class="row">
-                <div class="col-12 mb-4">
-                    <div class="card">
-                        <div class="card-body text-center">
-                            <h3 class="card-title">Welcome to {{ settings.get('logo', 'ChatBot') }}</h3>
-                            <p class="card-text">Ask me anything or browse through our frequently asked questions below.</p>
-                            <button class="btn btn-primary" onclick="startChat()">
-                                <i class="fas fa-comments"></i> Start Chat
-                            </button>
-                        </div>
-                    </div>
+    <!-- Main Content Area -->
+    <div class="main-content-wrapper">
+        <div class="d-flex flex-row h-100">
+            <!-- Sidebar -->
+            <div class="visitor-sidebar flex-shrink-0">
+                <div class="sidebar-header py-4 text-center">
+                    <h3 class="sidebar-title mb-3">FAQ</h3>
+                    <hr class="sidebar-divider">
                 </div>
-                {% for faq in faqs %}
-                <div class="col-md-6 mb-4">
-                    <div class="card h-100">
-                        <div class="card-body">
-                            <h5 class="card-title">{{ faq.question }}</h5>
-                            <p class="card-text">{{ faq.answer }}</p>
-                            <button class="btn btn-outline-primary btn-sm" onclick="askQuestion('{{ faq.question|replace("'", "\\'") }}')">
-                                <i class="fas fa-comments"></i> Ask This
-                            </button>
-                        </div>
-                    </div>
+              
+                <div class="sidebar-faq-list">
+                    {% if faqs %}
+                    <ul class="faq-bullets list-unstyled mb-0">
+                        {% for faq in faqs %}
+                        <li>
+                            <a href="#" class="faq-bullet-link" onclick="askQuestion({{ faq.question|tojson }})">{{ faq.question }}</a>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <div class="text-center text-muted">No FAQs found</div>
+                    {% endif %}
                 </div>
-                {% endfor %}
             </div>
 
-            <!-- Chat Interface (Initially Hidden) -->
-            <div id="chatInterface" class="d-none">
-                <div class="card">
-                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">
-                            <i class="fas fa-comments"></i> Chat
-                        </h5>
-                        <button class="btn btn-sm btn-light" onclick="showFaqCards()">
-                            <i class="fas fa-arrow-left"></i> Back to FAQs
-                        </button>
+            <!-- Main Chat Area -->
+            <div class="visitor-main-bg flex-grow-1">
+                <div class="visitor-chat-container">
+                    <!-- Initial FAQ Buttons -->
+                    <div id="initialFaqs" class="row g-2 mb-4">
+                        {% if faqs %}
+                            {% for faq in faqs[:6] %}
+                            <div class="col-12 col-md-6">
+                                <button class="quick-faq-btn w-100 text-center" onclick="askQuestion({{ faq.question|tojson }})">{{ faq.question }}</button>
+                            </div>
+                            {% endfor %}
+                        {% endif %}
                     </div>
-                    <div class="card-body">
-                        <div id="chatMessages" class="mb-4" style="height: 400px; overflow-y: auto;">
-                            <!-- Welcome message will be added here -->
-                        </div>
-                        <form id="chatForm" class="d-flex">
-                            <input type="text" id="question" class="form-control me-2" placeholder="Type your question here..." autocomplete="off">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-paper-plane"></i>
-                            </button>
-                        </form>
-                    </div>
+
+                    <!-- Chat Area -->
+                    <div id="chatMessages" class="visitor-chat-messages"></div>
+
+                    <!-- Input -->
+                    <form id="chatForm" class="visitor-chat-form d-flex align-items-center">
+                        <input type="text" id="question" class="form-control visitor-chat-input" placeholder="Type your message here..." autocomplete="off">
+                        <button type="submit" class="btn visitor-send-btn ms-2"><i class="fas fa-paper-plane"></i></button>
+                    </form>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Footer -->
+    <footer class="visitor-footer text-center py-2">
+        <span>{{ settings.get('copyright', 'GPT Lab © 2024') }}</span>
+    </footer>
 </div>
-
-<!-- Footer -->
-<footer class="bg-light py-3 mt-auto">
-    <div class="container text-center">
-        <p class="mb-0">{{ settings.get('copyright', '') }}</p>
-    </div>
-</footer>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// Initialize chat with welcome message
-function startChat() {
-    document.getElementById('faqCards').classList.add('d-none');
-    document.getElementById('chatInterface').classList.remove('d-none');
-    addMessage('Hello! I\'m your AI assistant. How can I help you today?', 'bot');
-    document.getElementById('question').focus();
-}
-
-// Show FAQ cards
-function showFaqCards() {
-    document.getElementById('chatInterface').classList.add('d-none');
-    document.getElementById('faqCards').classList.remove('d-none');
-}
-
-// Show chat interface when user interacts with input
-document.getElementById('question').addEventListener('focus', function() {
-    if (document.getElementById('chatInterface').classList.contains('d-none')) {
-        startChat();
-    }
-});
-
-// Function to ask a question from FAQ list
+// Function to ask a question from FAQ list or quick button
 function askQuestion(question) {
-    document.getElementById('question').value = question;
-    if (document.getElementById('chatInterface').classList.contains('d-none')) {
-        startChat();
+    // Hide initial FAQs if they are visible
+    const initialFaqs = document.getElementById('initialFaqs');
+    if (initialFaqs && initialFaqs.style.display !== 'none') {
+        initialFaqs.style.display = 'none';
     }
-    document.getElementById('chatForm').dispatchEvent(new Event('submit'));
-}
-
-// Handle form submission
-document.getElementById('chatForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const question = document.getElementById('question').value;
-    if (!question) return;
-
-    // Add user message
+    
+    // Add user message to chat immediately
     addMessage(question, 'user');
-    document.getElementById('question').value = '';
-
-    // Show loading state
+    
+    // Show loading message
     const loadingId = addMessage('Thinking...', 'bot', true);
-
-    // Send to backend
+    
+    // Send request to server
     fetch('/api/chat', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: question })
     })
     .then(response => response.json())
@@ -157,20 +101,18 @@ document.getElementById('chatForm').addEventListener('submit', function(e) {
         // Remove loading message
         document.getElementById(loadingId).remove();
         
-        // Add bot response
-        addMessage(data.answer, 'bot');
+        // Add bot response with query ID
+        const messageId = addMessage(data.answer, 'bot');
         
-        // Show sources if available
+        // Add sources if available
         if (data.sources && data.sources.length > 0) {
-            const sourcesHtml = data.sources.map(source => 
-                `<div class="source-item">
-                    <small class="text-muted">Source: ${source.text}</small>
-                </div>`
+            const sourcesHtml = data.sources.map(source =>
+                `<div class='source-item'><small class='text-muted'>Source: ${source.text}</small></div>`
             ).join('');
-            addMessage(`<div class="sources">${sourcesHtml}</div>`, 'bot');
+            addMessage(`<div class='sources'>${sourcesHtml}</div>`, 'bot');
         }
         
-        // Show error message if any
+        // Show notifications if needed
         if (data.type === 'error') {
             toastr.error(data.answer);
         } else if (data.type === 'info') {
@@ -178,148 +120,366 @@ document.getElementById('chatForm').addEventListener('submit', function(e) {
         }
     })
     .catch(error => {
+        // Remove loading message
         document.getElementById(loadingId).remove();
+        
+        // Show error message
         addMessage('Sorry, an error occurred. Please try again.', 'bot');
         toastr.error('An error occurred while processing your question');
     });
+}
+
+// Handle form submission
+const chatForm = document.getElementById('chatForm');
+const chatMessages = document.getElementById('chatMessages');
+
+chatForm.addEventListener('submit', function(e) {
+    e.preventDefault();
+    const question = document.getElementById('question').value;
+    if (!question) return;
+    
+    // Use the same askQuestion function for form submission
+    askQuestion(question);
+    
+    // Clear input field after sending
+    document.getElementById('question').value = '';
 });
 
-// Function to add a message to the chat
 function addMessage(text, sender, isTemporary = false) {
-    const messagesDiv = document.getElementById('chatMessages');
     const messageDiv = document.createElement('div');
-    const messageId = 'msg-' + Date.now();
+    const messageId = 'msg-' + Date.now() + Math.floor(Math.random()*1000);
     messageDiv.id = messageId;
-    messageDiv.className = `message ${sender}-message ${isTemporary ? 'temporary' : ''}`;
-    messageDiv.innerHTML = `
-        <div class="message-content">
-            <div class="message-text">${text}</div>
-            <div class="message-time">${new Date().toLocaleTimeString()}</div>
-        </div>
-    `;
-    messagesDiv.appendChild(messageDiv);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    messageDiv.className = `visitor-message ${sender}-message ${isTemporary ? 'temporary' : ''}`;
+    
+    let content = `<div class="visitor-message-content">${text}</div>`;
+    
+    // Add feedback buttons for bot messages
+    if (sender === 'bot' && !isTemporary) {
+        content += `
+            <div class="feedback-buttons mt-2">
+                <button class="btn btn-sm btn-outline-success me-2" onclick="submitFeedback(${messageId}, 'like')">
+                    <i class="fas fa-thumbs-up"></i> Helpful
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="submitFeedback(${messageId}, 'dislike')">
+                    <i class="fas fa-thumbs-down"></i> Not Helpful
+                </button>
+            </div>
+        `;
+    }
+    
+    messageDiv.innerHTML = content;
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
     return messageId;
+}
+
+function submitFeedback(messageId, feedback) {
+    // Get the query ID from the message ID
+    const queryId = messageId.split('-')[1];
+    
+    // Send feedback to server
+    fetch(`/api/chat/${queryId}/feedback`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ feedback: feedback })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.message) {
+            toastr.success('Thank you for your feedback!');
+            // Disable feedback buttons after submission
+            const feedbackButtons = document.querySelector(`#${messageId} .feedback-buttons`);
+            if (feedbackButtons) {
+                feedbackButtons.innerHTML = '<small class="text-muted">Feedback recorded</small>';
+            }
+        } else {
+            toastr.error(data.error || 'Failed to record feedback');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        toastr.error('An error occurred while submitting feedback');
+    });
 }
 
 // Handle Enter key in chat input
 document.getElementById('question').addEventListener('keypress', function(e) {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        document.getElementById('chatForm').dispatchEvent(new Event('submit'));
+        chatForm.dispatchEvent(new Event('submit'));
     }
+});
+
+// Add click handlers for FAQ links and buttons
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle sidebar FAQ links
+    document.querySelectorAll('.faq-bullet-link').forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            const question = this.textContent;
+            askQuestion(question);
+        });
+    });
+
+    // Handle quick FAQ buttons
+    document.querySelectorAll('.quick-faq-btn').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            const question = this.textContent;
+            askQuestion(question);
+        });
+    });
 });
 </script>
 
 <style>
-.message {
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.visitor-bg {
+    height: 100vh;
+    background: #ede3f7;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.visitor-navbar {
+    background: #5b1fa6;
+    color: #fff;
+    padding: 1rem;
+    height: 60px;
+    flex-shrink: 0;
+}
+
+.navbar-logo {
+    font-weight: 700;
+    font-size: 1.5rem;
+    color: #fff;
+    letter-spacing: 1px;
+}
+
+.main-content-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0; /* Important for Firefox */
+}
+
+.visitor-sidebar {
+    background: #fff;
+    width: 25%;
+    min-width: 250px;
+    max-width: 350px;
+    border-right: 1px solid #eee;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.sidebar-header {
+    background: #fff;
+    flex-shrink: 0;
+}
+
+.sidebar-title {
+    font-weight: 600;
+    color: #5b1fa6;
+    letter-spacing: 1px;
+}
+
+.sidebar-divider {
+    border-color: #5b1fa6;
+    opacity: 0.2;
+    margin: 0 2rem;
+}
+
+.sidebar-faq-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1.5rem 1rem 1rem 1.5rem;
+    min-height: 0; /* Important for Firefox */
+}
+
+.faq-bullets li {
     margin-bottom: 1rem;
+    font-size: 1rem;
+    list-style: disc inside;
+}
+
+.faq-bullet-link {
+    color: #5b1fa6;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.faq-bullet-link:hover {
+    color: #3d136e;
+    text-decoration: underline;
+}
+
+.visitor-main-bg {
+    background: #ede3f7;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0; /* Important for Firefox */
+}
+
+.visitor-chat-container {
+    background: #fff;
+    box-shadow: 0 2px 16px rgba(91,31,166,0.08);
+    padding: 2rem;
+    height: 100%;
     display: flex;
     flex-direction: column;
 }
 
-.user-message {
-    align-items: flex-end;
+.quick-faq-btn {
+    background: #f3f0fa;
+    border: none;
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.5rem;
+    color: #333;
+    font-size: 1rem;
+    font-weight: 500;
+    transition: background 0.2s, color 0.2s;
 }
 
-.bot-message {
-    align-items: flex-start;
+.quick-faq-btn:hover {
+    background: #e0d3f7;
+    color: #5b1fa6;
 }
 
-.message-content {
+.visitor-chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 1rem;
+    padding-right: 0.5rem;
+    min-height: 0; /* Important for Firefox */
+}
+
+.visitor-message {
+    margin-bottom: 0.75rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.user-message .visitor-message-content {
+    background: #ede3f7;
+    color: #5b1fa6;
+    align-self: flex-end;
+    border-radius: 12px 12px 0 12px;
+    padding: 0.75rem 1rem;
     max-width: 80%;
-    padding: 0.75rem;
-    border-radius: 1rem;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
-.user-message .message-content {
-    background-color: #007bff;
-    color: white;
+.bot-message .visitor-message-content {
+    background: #f3f0fa;
+    color: #333;
+    align-self: flex-start;
+    border-radius: 12px 12px 12px 0;
+    padding: 0.75rem 1rem;
+    max-width: 80%;
 }
 
-.bot-message .message-content {
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
+.visitor-chat-form {
+    margin-top: auto;
+    width: 100%;
 }
 
-.message-time {
-    font-size: 0.75rem;
-    margin-top: 0.25rem;
-    opacity: 0.7;
+.visitor-chat-input {
+    border-radius: 8px;
+    border: 1px solid #e0d3f7;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    background: #f3f0fa;
+    color: #333;
 }
 
-.temporary {
-    opacity: 0.7;
-    font-style: italic;
+.visitor-send-btn {
+    background: #5b1fa6;
+    color: #fff;
+    border-radius: 8px;
+    font-size: 1.25rem;
+    padding: 0.5rem 1.25rem;
+    border: none;
+    transition: background 0.2s;
 }
 
-.sources {
+.visitor-send-btn:hover {
+    background: #3d136e;
+}
+
+.visitor-footer {
+    background: #5b1fa6;
+    color: #fff;
     font-size: 0.9rem;
+    letter-spacing: 1px;
+    height: 50px;
+    flex-shrink: 0;
+}
+
+.visitor-info-btn {
+    background: transparent;
+    color: #fff;
+    border: none;
+    font-size: 1.25rem;
+    box-shadow: none;
+}
+
+.visitor-info-btn:hover {
+    color: #e0d3f7;
+}
+
+@media (max-width: 991.98px) {
+    .visitor-sidebar {
+        max-width: 100vw;
+        min-width: unset;
+    }
+    .visitor-chat-container {
+        padding: 1rem;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .visitor-sidebar {
+        display: none;
+    }
+    .visitor-main-bg {
+        width: 100%;
+    }
+    .visitor-chat-container {
+        border-radius: 0;
+    }
+}
+
+.feedback-buttons {
+    display: flex;
+    justify-content: flex-start;
     margin-top: 0.5rem;
 }
 
-.source-item {
-    padding: 0.5rem;
-    background-color: #f8f9fa;
-    border-radius: 0.5rem;
-    margin-bottom: 0.5rem;
-    border: 1px solid #dee2e6;
+.feedback-buttons .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
 }
 
-.sidebar {
-    min-height: 100vh;
-    background-color: #4e73df;
-    background-image: linear-gradient(180deg, #4e73df 10%, #224abe 100%);
-    background-size: cover;
+.feedback-buttons .btn i {
+    margin-right: 0.25rem;
 }
 
-.sidebar .nav-link {
-    color: rgba(255, 255, 255, 0.8);
-    padding: 1rem;
-    font-weight: 500;
-    transition: all 0.3s ease;
-}
-
-.sidebar .nav-link:hover {
-    color: #fff;
-    background-color: rgba(255, 255, 255, 0.1);
-    transform: translateX(5px);
-}
-
-.sidebar .nav-link.active {
-    color: #fff;
-    background-color: rgba(255, 255, 255, 0.2);
-}
-
-.sidebar .nav-link i {
-    margin-right: 0.5rem;
-}
-
-.card {
-    transition: all 0.3s ease;
-}
-
-.card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-}
-
-#chatMessages::-webkit-scrollbar {
-    width: 6px;
-}
-
-#chatMessages::-webkit-scrollbar-track {
-    background: #f1f1f1;
-}
-
-#chatMessages::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 3px;
-}
-
-#chatMessages::-webkit-scrollbar-thumb:hover {
-    background: #555;
+.bot-message .feedback-buttons {
+    margin-left: 0.5rem;
 }
 </style>
 {% endblock %} 

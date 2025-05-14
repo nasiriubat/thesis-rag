@@ -16,7 +16,7 @@
                         {% endif %}
                     {% endwith %}
                     
-                    <form method="POST" action="{{ url_for('admin_login') }}">
+                    <form method="POST" action="{{ url_for('main.admin_login') }}">
                         <div class="mb-3">
                             <label for="email" class="form-label">Email</label>
                             <input type="email" class="form-control" id="email" name="email" required>

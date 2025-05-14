@@ -63,7 +63,7 @@
                 <h5 class="modal-title">Add New Role</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form id="addRoleForm" method="POST" action="{{ url_for('api_create_role') }}">
+            <form id="addRoleForm" method="POST" action="{{ url_for('main.api_create_role') }}">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="roleName" class="form-label">Role Name</label>
@@ -139,40 +139,74 @@ function deleteRole(id) {
 document.getElementById('addRoleForm').addEventListener('submit', function(e) {
     e.preventDefault();
     const formData = new FormData(this);
+    
+    // Show loading state
+    const submitButton = this.querySelector('button[type="submit"]');
+    const originalButtonText = submitButton.innerHTML;
+    submitButton.disabled = true;
+    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+
     fetch(this.action, {
         method: 'POST',
         body: formData
     }).then(response => response.json())
     .then(data => {
         if (data.type === 'success') {
+            // Close the modal first
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addRoleModal'));
+            modal.hide();
+            
             toastr.success(data.message);
             setTimeout(() => window.location.reload(), 1000);
         } else {
             toastr.error(data.message);
+            // Reset button state
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalButtonText;
         }
     })
     .catch(error => {
         toastr.error('An error occurred while creating the role');
+        // Reset button state
+        submitButton.disabled = false;
+        submitButton.innerHTML = originalButtonText;
     });
 });
 
 document.getElementById('editRoleForm').addEventListener('submit', function(e) {
     e.preventDefault();
     const formData = new FormData(this);
+    
+    // Show loading state
+    const submitButton = this.querySelector('button[type="submit"]');
+    const originalButtonText = submitButton.innerHTML;
+    submitButton.disabled = true;
+    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
     fetch(this.action, {
         method: 'PUT',
         body: formData
     }).then(response => response.json())
     .then(data => {
         if (data.type === 'success') {
+            // Close the modal first
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editRoleModal'));
+            modal.hide();
+            
             toastr.success(data.message);
             setTimeout(() => window.location.reload(), 1000);
         } else {
             toastr.error(data.message);
+            // Reset button state
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalButtonText;
         }
     })
     .catch(error => {
         toastr.error('An error occurred while updating the role');
+        // Reset button state
+        submitButton.disabled = false;
+        submitButton.innerHTML = originalButtonText;
     });
 });
 </script>

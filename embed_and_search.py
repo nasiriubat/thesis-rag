@@ -5,7 +5,7 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
 import openai
 import numpy as np
 import uuid
-from app import app, db
+from flask import current_app
 from pathlib import Path
 from typing import List, Dict, Optional
 from tqdm import tqdm
@@ -14,9 +14,6 @@ import json
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import re
-
-# Load OpenAI API key from .env file
-openai.api_key = api_key=app.config["OPENAI_API_KEY"]
 
 # Initialize storage paths
 EMBEDDINGS_FOLDER = Path("dataembedding")
@@ -30,6 +27,10 @@ encoding = tiktoken.encoding_for_model("text-embedding-ada-002")
 MAX_TOKENS = 500  # Smaller chunks for more precise matching
 OVERLAP = 100
 MIN_SCORE_THRESHOLD = 0.3  # Base threshold for all content types
+
+def get_openai_key():
+    """Get OpenAI API key from current app context."""
+    return current_app.config.get('OPENAI_API_KEY')
 
 def split_into_chunks(text: str, max_tokens: int = MAX_TOKENS, overlap: int = OVERLAP) -> List[str]:
     """Split text into chunks, trying to preserve natural boundaries where possible."""

@@ -39,6 +39,9 @@
                                 <button class="btn btn-primary btn-sm" onclick="answerQuestion({{ question.id }}, '{{ question.question|replace("'", "\\'") }}')">
                                     <i class="fas fa-reply"></i> Answer
                                 </button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteQuestion({{ question.id }})">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
                             </td>
                         </tr>
                         {% endfor %}
@@ -92,9 +95,29 @@ function answerQuestion(id, question) {
     const form = document.getElementById('answerQuestionForm');
     form.action = `/api/new-question/${id}/answer`;
     document.getElementById('questionText').textContent = question;
-    document.getElementById('answer').value = '';
-    document.getElementById('ai').checked = false;
     new bootstrap.Modal(document.getElementById('answerQuestionModal')).show();
+}
+
+function deleteQuestion(id) {
+    if (confirm('Are you sure you want to delete this question?')) {
+        fetch(`/api/new-question/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        }).then(response => response.json())
+        .then(data => {
+            if (data.type === 'success') {
+                toastr.success(data.message);
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                toastr.error(data.message);
+            }
+        })
+        .catch(error => {
+            toastr.error('An error occurred while deleting the question');
+        });
+    }
 }
 
 // Handle form submission
@@ -102,20 +125,36 @@ document.getElementById('answerQuestionForm').addEventListener('submit', functio
     e.preventDefault();
     const formData = new FormData(this);
     
+    // Show loading state
+    const submitButton = this.querySelector('button[type="submit"]');
+    const originalButtonText = submitButton.innerHTML;
+    submitButton.disabled = true;
+    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
     fetch(this.action, {
         method: 'POST',
         body: formData
     }).then(response => response.json())
     .then(data => {
         if (data.type === 'success') {
+            // Close the modal first
+            const modal = bootstrap.Modal.getInstance(document.getElementById('answerQuestionModal'));
+            modal.hide();
+            
             toastr.success(data.message);
             setTimeout(() => window.location.reload(), 1000);
         } else {
             toastr.error(data.message);
+            // Reset button state
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalButtonText;
         }
     })
     .catch(error => {
         toastr.error('An error occurred while saving the answer');
+        // Reset button state
+        submitButton.disabled = false;
+        submitButton.innerHTML = originalButtonText;
     });
 });
 </script>

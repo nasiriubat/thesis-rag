@@ -1,5 +1,18 @@
 {% extends "admin/base.html" %}
 
+{% block extra_css %}
+<link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet">
+<style>
+    .required-field::after {
+        content: " *";
+        color: red;
+    }
+    .ck-editor__editable {
+        min-height: 200px;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <h1 class="h3 mb-4 text-gray-800">System Settings</h1>
@@ -19,13 +32,13 @@
             <h6 class="m-0 font-weight-bold text-primary">General Settings</h6>
         </div>
         <div class="card-body">
-            <form method="POST" action="{{ url_for('admin_settings') }}">
+            <form method="POST" action="{{ url_for('main.admin_settings') }}">
                 <div class="mb-3">
-                    <label for="logo" class="form-label">Application Name</label>
+                    <label for="logo" class="form-label required-field">Application Name</label>
                     <input type="text" class="form-control" id="logo" name="logo" value="{{ settings.get('logo', '') }}" required>
                 </div>
                 <div class="mb-3">
-                    <label for="openai_key" class="form-label">OpenAI API Key</label>
+                    <label for="openai_key" class="form-label required-field">OpenAI API Key</label>
                     <input type="password" class="form-control" id="openai_key" name="openai_key" value="{{ settings.get('openai_key', '') }}" required>
                 </div>
                 <div class="mb-3">
@@ -34,11 +47,11 @@
                 </div>
                 <div class="mb-3">
                     <label for="about" class="form-label">About Page Content</label>
-                    <textarea class="form-control" id="about" name="about" rows="5">{{ settings.get('about', '') }}</textarea>
+                    <textarea class="form-control" id="about" name="about">{{ settings.get('about', '') }}</textarea>
                 </div>
                 <div class="mb-3">
                     <label for="contact" class="form-label">Contact Page Content</label>
-                    <textarea class="form-control" id="contact" name="contact" rows="5">{{ settings.get('contact', '') }}</textarea>
+                    <textarea class="form-control" id="contact" name="contact">{{ settings.get('contact', '') }}</textarea>
                 </div>
                 <button type="submit" class="btn btn-primary">Save Settings</button>
             </form>
@@ -48,30 +61,36 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/5/tinymce.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+<script src="https://cdn.ckeditor.com/ckeditor5/40.1.0/classic/ckeditor.js"></script>
 <script>
-tinymce.init({
-    selector: '#about, #contact',
-    height: 300,
-    menubar: false,
-    plugins: [
-        'advlist autolink lists link image charmap print preview anchor',
-        'searchreplace visualblocks code fullscreen',
-        'insertdatetime media table paste code help wordcount'
-    ],
-    toolbar: 'undo redo | formatselect | bold italic backcolor | \
-        alignleft aligncenter alignright alignjustify | \
-        bullist numlist outdent indent | removeformat | help'
-});
+// Initialize CKEditor for both textareas
+ClassicEditor
+    .create(document.querySelector('#about'), {
+        toolbar: ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', '|', 'undo', 'redo'],
+        placeholder: 'Enter about page content here...'
+    })
+    .catch(error => {
+        console.error(error);
+    });
+
+ClassicEditor
+    .create(document.querySelector('#contact'), {
+        toolbar: ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', '|', 'undo', 'redo'],
+        placeholder: 'Enter contact page content here...'
+    })
+    .catch(error => {
+        console.error(error);
+    });
 
 // Handle form submission
 document.querySelector('form').addEventListener('submit', function(e) {
     e.preventDefault();
     const formData = new FormData(this);
     
-    // Update TinyMCE content
-    formData.set('about', tinymce.get('about').getContent());
-    formData.set('contact', tinymce.get('contact').getContent());
+    // Get content from CKEditor instances
+    formData.set('about', document.querySelector('#about').value);
+    formData.set('contact', document.querySelector('#contact').value);
     
     fetch(this.action, {
         method: 'POST',

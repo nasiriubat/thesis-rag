@@ -69,7 +69,7 @@
                 <h5 class="modal-title">Add New User</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form id="addUserForm" method="POST" action="{{ url_for('api_create_user') }}">
+            <form id="addUserForm" method="POST" action="{{ url_for('main.api_create_user') }}">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="userName" class="form-label">Name</label>
@@ -191,40 +191,74 @@ function deleteUser(id) {
 document.getElementById('addUserForm').addEventListener('submit', function(e) {
     e.preventDefault();
     const formData = new FormData(this);
+    
+    // Show loading state
+    const submitButton = this.querySelector('button[type="submit"]');
+    const originalButtonText = submitButton.innerHTML;
+    submitButton.disabled = true;
+    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+
     fetch(this.action, {
         method: 'POST',
         body: formData
     }).then(response => response.json())
     .then(data => {
         if (data.type === 'success') {
+            // Close the modal first
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addUserModal'));
+            modal.hide();
+            
             toastr.success(data.message);
             setTimeout(() => window.location.reload(), 1000);
         } else {
             toastr.error(data.message);
+            // Reset button state
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalButtonText;
         }
     })
     .catch(error => {
         toastr.error('An error occurred while creating the user');
+        // Reset button state
+        submitButton.disabled = false;
+        submitButton.innerHTML = originalButtonText;
     });
 });
 
 document.getElementById('editUserForm').addEventListener('submit', function(e) {
     e.preventDefault();
     const formData = new FormData(this);
+    
+    // Show loading state
+    const submitButton = this.querySelector('button[type="submit"]');
+    const originalButtonText = submitButton.innerHTML;
+    submitButton.disabled = true;
+    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
     fetch(this.action, {
         method: 'PUT',
         body: formData
     }).then(response => response.json())
     .then(data => {
         if (data.type === 'success') {
+            // Close the modal first
+            const modal = bootstrap.Modal.getInstance(document.getElementById('editUserModal'));
+            modal.hide();
+            
             toastr.success(data.message);
             setTimeout(() => window.location.reload(), 1000);
         } else {
             toastr.error(data.message);
+            // Reset button state
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalButtonText;
         }
     })
     .catch(error => {
         toastr.error('An error occurred while updating the user');
+        // Reset button state
+        submitButton.disabled = false;
+        submitButton.innerHTML = originalButtonText;
     });
 });
 </script>

@@ -1,5 +1,9 @@
 {% extends "admin/base.html" %}
 
+{% block extra_css %}
+<link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet">
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <h1 class="h3 mb-4 text-gray-800">File Management</h1>
@@ -8,7 +12,7 @@
         {% if messages %}
             {% for category, message in messages %}
                 <script>
-                    toastr.{{ category }}('{{ message }}');
+                    toastr["{{ category }}"]("{{ message }}");
                 </script>
             {% endfor %}
         {% endif %}
@@ -36,17 +40,18 @@
                     </thead>
                     <tbody>
                         {% for file in files %}
-                        <tr>
+                    
+                        <tr data-file-id="{{ file.id }}">
                             <td>{{ file.id }}</td>
                             <td>{{ file.text[:100] }}{% if file.text|length > 100 %}...{% endif %}</td>
                             <td>{{ file.summary[:100] if file.summary else '-' }}{% if file.summary and file.summary|length > 100 %}...{% endif %}</td>
                             <td>{{ file.user.name }}</td>
                             <td>{{ file.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                             <td>
-                                <button class="btn btn-info btn-sm" onclick="viewFile({{ file.id }}, '{{ file.text|replace("'", "\\'") }}', '{{ file.summary|replace("'", "\\'") if file.summary else "" }}')">
+                                <button class="btn btn-info btn-sm" onclick="viewFile('{{ file.id }}', '{{ file.text|replace("'", "\\'")|replace("\n", "\\n") }}', '{{ file.summary|replace("'", "\\'")|replace("\n", "\\n") if file.summary else "" }}', '{{ file.original_filename|replace("'", "\\'") if file.original_filename else "" }}')">
                                     <i class="fas fa-eye"></i>
                                 </button>
-                                <button class="btn btn-danger btn-sm" onclick="deleteFile({{ file.id }})">
+                                <button class="btn btn-danger btn-sm" onclick="deleteFile('{{ file.id }}')">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </td>
@@ -67,12 +72,39 @@
                 <h5 class="modal-title">Upload New File</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form id="uploadFileForm" method="POST" action="{{ url_for('api_upload_file') }}" enctype="multipart/form-data">
+            <form id="uploadFileForm" method="POST" action="{{ url_for('main.api_upload_file') }}" enctype="multipart/form-data">
+                <input type="hidden" id="uploadType" name="uploadType">
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label for="file" class="form-label">Select File</label>
-                        <input type="file" class="form-control" id="file" name="file" required>
-                        <small class="text-muted">Supported formats: PDF, DOCX, TXT</small>
+                        <label for="fileType" class="form-label">Select Upload Type</label>
+                        <select class="form-select" id="fileType" name="fileType" required>
+                            <option value="">Choose upload type...</option>
+                            <option value="file">File Upload</option>
+                            <option value="url">URL</option>
+                            <option value="text">Text</option>
+                        </select>
+                    </div>
+
+                    <!-- File Upload Section -->
+                    <div id="fileUploadSection" class="mb-3" style="display: none;">
+                        <label for="file" class="form-label">Select Files</label>
+                        <input type="file" class="form-control" id="file" name="file" multiple accept=".pdf,.docx,.txt">
+                        <small class="text-muted">Supported formats: PDF, DOCX, TXT. You can select multiple files.</small>
+                        <div id="fileList" class="mt-2"></div>
+                    </div>
+
+                    <!-- URL Section -->
+                    <div id="urlSection" class="mb-3" style="display: none;">
+                        <label for="url" class="form-label">Enter URL</label>
+                        <input type="url" class="form-control" id="url" name="url" placeholder="https://example.com/document.pdf">
+                        <small class="text-muted">Enter a valid URL to the document</small>
+                    </div>
+
+                    <!-- Text Section -->
+                    <div id="textSection" class="mb-3" style="display: none;">
+                        <label for="text" class="form-label">Enter Text</label>
+                        <textarea class="form-control" id="text" name="text" rows="5" placeholder="Enter your text here..."></textarea>
+                        <small class="text-muted">Enter or paste your text content</small>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -94,12 +126,12 @@
             </div>
             <div class="modal-body">
                 <div class="mb-3">
-                    <h6>Summary</h6>
-                    <p id="fileSummary" class="text-muted">-</p>
+                    <h6>File Title</h6>
+                    <p id="fileTitle" class="text-primary fw-bold"></p>
                 </div>
                 <div class="mb-3">
                     <h6>Content</h6>
-                    <pre id="fileContent" class="bg-light p-3" style="max-height: 400px; overflow-y: auto;"></pre>
+                    <div id="fileContent" class="bg-light p-3" style="max-height: 500px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; line-height: 1.5;"></div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -111,54 +143,179 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
 <script>
-function viewFile(id, content, summary) {
-    document.getElementById('fileContent').textContent = content;
-    document.getElementById('fileSummary').textContent = summary || '-';
-    new bootstrap.Modal(document.getElementById('viewFileModal')).show();
-}
+document.addEventListener('DOMContentLoaded', function() {
+    // View file function
+    window.viewFile = function(id, content, summary, title) {
+        document.getElementById('fileTitle').textContent = title || 'Untitled';
+        document.getElementById('fileContent').textContent = content;
+        new bootstrap.Modal(document.getElementById('viewFileModal')).show();
+    };
 
-function deleteFile(id) {
-    if (confirm('Are you sure you want to delete this file?')) {
-        fetch(`/api/file/${id}`, {
-            method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json'
+    // Delete file function
+    window.deleteFile = function(id) {
+        if (confirm('Are you sure you want to delete this file?')) {
+            fetch(`/api/file/${id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.type === 'success') {
+                    toastr.success(data.message);
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    toastr.error(data.message);
+                }
+            })
+            .catch(error => {
+                toastr.error('An error occurred while deleting the file');
+            });
+        }
+    };
+
+    // File type selection handler
+    const fileTypeSelect = document.getElementById('fileType');
+    fileTypeSelect.addEventListener('change', function () {
+    document.getElementById('uploadType').value = this.value;
+    });
+    if (fileTypeSelect) {
+        fileTypeSelect.addEventListener('change', function() {
+            document.getElementById('fileUploadSection').style.display = 'none';
+            document.getElementById('urlSection').style.display = 'none';
+            document.getElementById('textSection').style.display = 'none';
+
+            const selectedType = this.value;
+            if (selectedType === 'file') {
+                document.getElementById('fileUploadSection').style.display = 'block';
+            } else if (selectedType === 'url') {
+                document.getElementById('urlSection').style.display = 'block';
+            } else if (selectedType === 'text') {
+                document.getElementById('textSection').style.display = 'block';
             }
-        }).then(response => response.json())
-        .then(data => {
-            if (data.type === 'success') {
-                toastr.success(data.message);
-                setTimeout(() => window.location.reload(), 1000);
-            } else {
-                toastr.error(data.message);
-            }
-        })
-        .catch(error => {
-            toastr.error('An error occurred while deleting the file');
         });
     }
-}
 
-// Handle form submission
-document.getElementById('uploadFileForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const formData = new FormData(this);
-    fetch(this.action, {
-        method: 'POST',
-        body: formData
-    }).then(response => response.json())
-    .then(data => {
-        if (data.type === 'success') {
-            toastr.success(data.message);
-            setTimeout(() => window.location.reload(), 1000);
-        } else {
-            toastr.error(data.message);
-        }
-    })
-    .catch(error => {
-        toastr.error('An error occurred while uploading the file');
-    });
+    // File input change handler
+    const fileInput = document.getElementById('file');
+    const fileList = document.getElementById('fileList');
+    if (fileInput) {
+        fileInput.addEventListener('change', function() {
+            fileList.innerHTML = '';
+            if (this.files.length > 0) {
+                const ul = document.createElement('ul');
+                ul.className = 'list-group';
+                Array.from(this.files).forEach(file => {
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                    li.innerHTML = `
+                        ${file.name}
+                        <span class="badge bg-primary rounded-pill">${(file.size / 1024).toFixed(1)} KB</span>
+                    `;
+                    ul.appendChild(li);
+                });
+                fileList.appendChild(ul);
+            }
+        });
+    }
+
+    // Form submission handler
+    const uploadForm = document.getElementById('uploadFileForm');
+    if (uploadForm) {
+        uploadForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+            const fileType = document.getElementById('fileType').value;
+
+            // Debug: Log form data
+            console.log('Form Type:', fileType);
+            for (let pair of formData.entries()) {
+                console.log(pair[0] + ': ' + pair[1]);
+            }
+
+            // Validate based on file type
+            if (fileType === 'file') {
+                const files = document.getElementById('file').files;
+                if (files.length === 0) {
+                    toastr.error('Please select at least one file');
+                    return;
+                }
+                // Validate file types
+                const validTypes = ['.pdf', '.docx', '.txt'];
+                for (let file of files) {
+                    const ext = '.' + file.name.split('.').pop().toLowerCase();
+                    if (!validTypes.includes(ext)) {
+                        toastr.error(`Invalid file type: ${file.name}. Supported types are: PDF, DOCX, TXT`);
+                        return;
+                    }
+                }
+            } else if (fileType === 'url') {
+                const url = formData.get('url');
+                if (!url || !url.trim()) {
+                    toastr.error('Please enter a valid URL');
+                    return;
+                }
+                try {
+                    new URL(url);
+                } catch {
+                    toastr.error('Please enter a valid URL');
+                    return;
+                }
+            } else if (fileType === 'text') {
+                const text = formData.get('text');
+                if (!text || !text.trim()) {
+                    toastr.error('Please enter some text');
+                    return;
+                }
+            }
+
+            const submitButton = this.querySelector('button[type="submit"]');
+            const originalButtonText = submitButton.innerHTML;
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+
+            // Debug: Log the final form data being sent
+            console.log('Sending form data:');
+            for (let pair of formData.entries()) {
+                console.log(pair[0] + ': ' + pair[1]);
+            }
+
+            fetch(this.action, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Response data:', data);
+                if (data.type === 'success') {
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('uploadFileModal'));
+                    modal.hide();
+                    toastr.success(data.message);
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    toastr.error(data.message);
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalButtonText;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                toastr.error('An error occurred while uploading');
+                submitButton.disabled = false;
+                submitButton.innerHTML = originalButtonText;
+            });
+        });
+    }
 });
 </script>
 {% endblock %} 

@@ -29,7 +29,6 @@
                             <th>ID</th>
                             <th>Question</th>
                             <th>Answer</th>
-                            <th>AI Generated</th>
                             <th>Created At</th>
                             <th>Actions</th>
                         </tr>
@@ -40,16 +39,9 @@
                             <td>{{ faq.id }}</td>
                             <td>{{ faq.question[:100] }}{% if faq.question|length > 100 %}...{% endif %}</td>
                             <td>{{ faq.answer[:100] }}{% if faq.answer|length > 100 %}...{% endif %}</td>
-                            <td>
-                                {% if faq.ai %}
-                                <span class="badge bg-success">Yes</span>
-                                {% else %}
-                                <span class="badge bg-secondary">No</span>
-                                {% endif %}
-                            </td>
                             <td>{{ faq.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                             <td>
-                                <button class="btn btn-info btn-sm" onclick="editFaq({{ faq.id }}, '{{ faq.question|replace("'", "\\'") }}', '{{ faq.answer|replace("'", "\\'") }}', {{ faq.ai|tojson }})">
+                                <button class="btn btn-info btn-sm" onclick="editFaq({{ faq.id }}, '{{ faq.question|replace("'", "\\'") }}', '{{ faq.answer|replace("'", "\\'") }}')">
                                     <i class="fas fa-edit"></i>
                                 </button>
                                 <button class="btn btn-danger btn-sm" onclick="deleteFaq({{ faq.id }})">
@@ -73,7 +65,7 @@
                 <h5 class="modal-title">Add New FAQ</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form id="addFaqForm" method="POST" action="{{ url_for('api_create_faq') }}">
+            <form id="addFaqForm" method="POST" action="{{ url_for('main.api_create_faq') }}">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="faqQuestion" class="form-label">Question</label>
@@ -82,14 +74,6 @@
                     <div class="mb-3">
                         <label for="faqAnswer" class="form-label">Answer</label>
                         <textarea class="form-control" id="faqAnswer" name="answer" rows="5" required></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="faqAi" name="ai">
-                            <label class="form-check-label" for="faqAi">
-                                AI Generated
-                            </label>
-                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -112,20 +96,12 @@
             <form id="editFaqForm" method="POST">
                 <div class="modal-body">
                     <div class="mb-3">
-                        <label for="editFaqQuestion" class="form-label">Question</label>
-                        <textarea class="form-control" id="editFaqQuestion" name="question" rows="3" required></textarea>
+                        <label for="editQuestion" class="form-label">Question</label>
+                        <textarea class="form-control" id="editQuestion" name="question" rows="3" required></textarea>
                     </div>
                     <div class="mb-3">
-                        <label for="editFaqAnswer" class="form-label">Answer</label>
-                        <textarea class="form-control" id="editFaqAnswer" name="answer" rows="5" required></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="editFaqAi" name="ai">
-                            <label class="form-check-label" for="editFaqAi">
-                                AI Generated
-                            </label>
-                        </div>
+                        <label for="editAnswer" class="form-label">Answer</label>
+                        <textarea class="form-control" id="editAnswer" name="answer" rows="5" required></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -140,12 +116,14 @@
 
 {% block extra_js %}
 <script>
-function editFaq(id, question, answer, ai) {
+let currentFaqId = null;
+
+function editFaq(id, question, answer) {
+    currentFaqId = id;
     const form = document.getElementById('editFaqForm');
     form.action = `/api/faq/${id}`;
-    document.getElementById('editFaqQuestion').value = question;
-    document.getElementById('editFaqAnswer').value = answer;
-    document.getElementById('editFaqAi').checked = ai;
+    document.getElementById('editQuestion').value = question;
+    document.getElementById('editAnswer').value = answer;
     new bootstrap.Modal(document.getElementById('editFaqModal')).show();
 }
 
@@ -156,16 +134,18 @@ function deleteFaq(id) {
             headers: {
                 'Content-Type': 'application/json'
             }
-        }).then(response => response.json())
+        })
+        .then(response => response.json())
         .then(data => {
-            if (data.type === 'success') {
+            if (data.message) {
                 toastr.success(data.message);
                 setTimeout(() => window.location.reload(), 1000);
             } else {
-                toastr.error(data.message);
+                toastr.error(data.error || 'Failed to delete FAQ');
             }
         })
         .catch(error => {
+            console.error('Error:', error);
             toastr.error('An error occurred while deleting the FAQ');
         });
     }
@@ -175,41 +155,70 @@ function deleteFaq(id) {
 document.getElementById('addFaqForm').addEventListener('submit', function(e) {
     e.preventDefault();
     const formData = new FormData(this);
+    
+    // Show loading state
+    const submitButton = this.querySelector('button[type="submit"]');
+    const originalButtonText = submitButton.innerHTML;
+    submitButton.disabled = true;
+    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding...';
+
     fetch(this.action, {
         method: 'POST',
         body: formData
     }).then(response => response.json())
     .then(data => {
         if (data.type === 'success') {
+            // Close the modal first
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addFaqModal'));
+            modal.hide();
+            
             toastr.success(data.message);
             setTimeout(() => window.location.reload(), 1000);
         } else {
             toastr.error(data.message);
+            // Reset button state
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalButtonText;
         }
     })
     .catch(error => {
         toastr.error('An error occurred while creating the FAQ');
+        // Reset button state
+        submitButton.disabled = false;
+        submitButton.innerHTML = originalButtonText;
     });
 });
 
-document.getElementById('editFaqForm').addEventListener('submit', function(e) {
+document.getElementById('editFaqForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-    const formData = new FormData(this);
-    fetch(this.action, {
-        method: 'PUT',
-        body: formData
-    }).then(response => response.json())
-    .then(data => {
-        if (data.type === 'success') {
-            toastr.success(data.message);
-            setTimeout(() => window.location.reload(), 1000);
+    
+    const formData = {
+        question: document.getElementById('editQuestion').value,
+        answer: document.getElementById('editAnswer').value
+    };
+    
+    try {
+        const response = await fetch(`/api/faq/${currentFaqId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(formData)
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            toastr.success(data.message || 'FAQ updated successfully');
+            $('#editFaqModal').modal('hide');
+            setTimeout(() => location.reload(), 1000);
         } else {
-            toastr.error(data.message);
+            toastr.error(data.error || 'Failed to update FAQ');
         }
-    })
-    .catch(error => {
+    } catch (error) {
+        console.error('Error:', error);
         toastr.error('An error occurred while updating the FAQ');
-    });
+    }
 });
 </script>
 {% endblock %} 

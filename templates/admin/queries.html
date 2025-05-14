@@ -15,8 +15,11 @@
     {% endwith %}
     
     <div class="card shadow mb-4">
-        <div class="card-header py-3">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
             <h6 class="m-0 font-weight-bold text-primary">User Queries</h6>
+            <button type="button" class="btn btn-danger btn-sm" onclick="deleteAllQueries()">
+                <i class="fas fa-trash"></i> Delete All
+            </button>
         </div>
         <div class="card-body">
             <div class="table-responsive">
@@ -28,7 +31,6 @@
                             <th>Answer Found</th>
                             <th>User Feedback</th>
                             <th>Created At</th>
-                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -44,21 +46,15 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% if query.happy %}
+                                {% if query.happy is none %}
+                                <span class="badge bg-secondary">No Feedback</span>
+                                {% elif query.happy %}
                                 <span class="badge bg-success">Happy</span>
                                 {% else %}
                                 <span class="badge bg-danger">Not Happy</span>
                                 {% endif %}
                             </td>
                             <td>{{ query.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                            <td>
-                                <button class="btn btn-info btn-sm" onclick="viewQuery({{ query.id }}, '{{ query.question|replace("'", "\\'") }}', {{ query.answer_found|tojson }}, {{ query.happy|tojson }})">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                <button class="btn btn-danger btn-sm" onclick="deleteQuery({{ query.id }})">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -79,15 +75,11 @@
             <div class="modal-body">
                 <div class="mb-3">
                     <h6>Question</h6>
-                    <p id="queryQuestion" class="text-muted"></p>
+                    <p id="viewQueryQuestion" class="text-muted"></p>
                 </div>
                 <div class="mb-3">
-                    <h6>Answer Found</h6>
-                    <p id="queryAnswerFound" class="text-muted"></p>
-                </div>
-                <div class="mb-3">
-                    <h6>User Feedback</h6>
-                    <p id="queryFeedback" class="text-muted"></p>
+                    <h6>Answer</h6>
+                    <p id="viewQueryAnswer" class="text-muted"></p>
                 </div>
             </div>
             <div class="modal-footer">
@@ -100,33 +92,83 @@
 
 {% block extra_js %}
 <script>
-function viewQuery(id, question, answerFound, happy) {
-    document.getElementById('queryQuestion').textContent = question;
-    document.getElementById('queryAnswerFound').textContent = answerFound ? 'Yes' : 'No';
-    document.getElementById('queryFeedback').textContent = happy ? 'Happy' : 'Not Happy';
-    new bootstrap.Modal(document.getElementById('viewQueryModal')).show();
-}
-
-function deleteQuery(id) {
-    if (confirm('Are you sure you want to delete this query?')) {
-        fetch(`/api/query/${id}`, {
-            method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        }).then(response => response.json())
+function viewQuery(id) {
+    fetch(`/api/query/${id}`)
+        .then(response => response.json())
         .then(data => {
             if (data.type === 'success') {
-                toastr.success(data.message);
-                setTimeout(() => window.location.reload(), 1000);
+                document.getElementById('viewQueryQuestion').textContent = data.query.question;
+                document.getElementById('viewQueryAnswer').textContent = data.query.answer;
+                new bootstrap.Modal(document.getElementById('viewQueryModal')).show();
             } else {
                 toastr.error(data.message);
             }
         })
         .catch(error => {
-            toastr.error('An error occurred while deleting the query');
+            toastr.error('An error occurred while fetching the query');
+        });
+}
+
+function deleteAllQueries() {
+    if (confirm('Are you sure you want to delete all queries? This action cannot be undone.')) {
+        fetch('/api/queries/delete-all', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.message) {
+                toastr.success(data.message);
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                toastr.error(data.error || 'Failed to delete all queries');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            toastr.error('An error occurred while deleting all queries');
         });
     }
 }
+
+// Handle form submissions
+document.getElementById('answerQueryForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const formData = new FormData(this);
+    
+    // Show loading state
+    const submitButton = this.querySelector('button[type="submit"]');
+    const originalButtonText = submitButton.innerHTML;
+    submitButton.disabled = true;
+    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+    fetch(this.action, {
+        method: 'POST',
+        body: formData
+    }).then(response => response.json())
+    .then(data => {
+        if (data.type === 'success') {
+            // Close the modal first
+            const modal = bootstrap.Modal.getInstance(document.getElementById('answerQueryModal'));
+            modal.hide();
+            
+            toastr.success(data.message);
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            toastr.error(data.message);
+            // Reset button state
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalButtonText;
+        }
+    })
+    .catch(error => {
+        toastr.error('An error occurred while saving the answer');
+        // Reset button state
+        submitButton.disabled = false;
+        submitButton.innerHTML = originalButtonText;
+    });
+});
 </script>
 {% endblock %} 
