@@ -69,9 +69,10 @@ def chat():
         return jsonify({"error": "No question provided", "type": "error"}), 400
 
     try:
-        def save_query(answer_found=True):
+        def save_query(answer_found=True, answer=None):
             query = Query(
                 question=question,
+                answer=answer,
                 answer_found=answer_found,
                 happy=True,
                 language=language,
@@ -83,7 +84,7 @@ def chat():
         # 1. Check if exact match exists in FAQ
         faq = FAQ.query.filter(func.lower(FAQ.question) == question.lower()).first()
         if faq:
-            query = save_query()
+            query = save_query(answer=faq.answer)
             return jsonify(
                 {
                     "answer": faq.answer,
@@ -119,11 +120,12 @@ def chat():
         results = search_across_indices(question, file_ids, top_k=5)
         if not results:
             # Save query with answer_found=False and return no content message
-            query = save_query(answer_found=False)
             message = {
                 "fi": "Valitettavasti en löytänyt vastausta kysymykseesi. Olen tallentanut sen ja tiimimme tarkistaa sen.",
                 "en": "I'm sorry, I couldn't find a specific answer to your question. I've noted it down and our team will review it.",
             }.get(language, "en")
+            
+            query = save_query(answer_found=False, answer=message)
             
             # Create new question for review
             new_question = NewQuestion(question=question)
@@ -166,8 +168,8 @@ def chat():
 
         answer = response.choices[0].message.content
 
-        # 6. Save query
-        query = save_query()
+        # 6. Save query with the generated answer
+        query = save_query(answer=answer)
 
         return jsonify({"answer": answer, "type": "success", "query_id": query.id})
 
@@ -347,23 +349,21 @@ def api_answer_new_question(id):
     try:
         new_question = NewQuestion.query.get_or_404(id)
         answer = request.form.get("answer")
-        ai = request.form.get("ai") == "on"
 
         if not answer:
             return jsonify({"message": "Answer is required", "type": "error"}), 400
 
         # Create new FAQ
-        faq = FAQ(question=new_question.question, answer=answer, ai=ai)
+        faq = FAQ(question=new_question.question, answer=answer)
         db.session.add(faq)
 
         # Delete the new question
         db.session.delete(new_question)
         db.session.commit()
 
-        return jsonify(
-            {"message": "Question answered and added to FAQs", "type": "success"}
-        )
+        return jsonify({"message": "Question answered and added to FAQs", "type": "success"})
     except Exception as e:
+        print(f"Error in api_answer_new_question: {str(e)}")
         return jsonify({"message": str(e), "type": "error"}), 500
 
 
@@ -468,22 +468,40 @@ def api_manage_user(id):
 @login_required
 def api_create_faq():
     try:
-        question = request.form.get("question")
-        answer = request.form.get("answer")
+        if request.is_json:
+            # Handle JSON request (from query conversion)
+            data = request.get_json()
+            if not data or "question" not in data or "answer" not in data:
+                return jsonify({"type": "error", "message": "Question and answer are required"}), 400
 
-        if not all([question, answer]):
-            return (
-                jsonify(
-                    {"message": "Question and answer are required", "type": "error"}
-                ),
-                400,
+            # Create new FAQ
+            faq = FAQ(
+                question=data["question"],
+                answer=data["answer"]
             )
+            db.session.add(faq)
+            
+            # If query_id is provided, delete the query
+            if "query_id" in data:
+                query = Query.query.get(data["query_id"])
+                if query:
+                    db.session.delete(query)
+            
+            db.session.commit()
+            return jsonify({"type": "success", "message": "FAQ created successfully"})
+        else:
+            # Handle form data request (from FAQ page)
+            question = request.form.get("question")
+            answer = request.form.get("answer")
 
-        # Create FAQ record
-        faq = FAQ(question=question, answer=answer)
-        db.session.add(faq)
-        db.session.commit()  # Get the ID without committing
-        return jsonify({"message": "FAQ created successfully", "type": "success"})
+            if not all([question, answer]):
+                return jsonify({"message": "Question and answer are required", "type": "error"}), 400
+
+            # Create FAQ record
+            faq = FAQ(question=question, answer=answer)
+            db.session.add(faq)
+            db.session.commit()
+            return jsonify({"message": "FAQ created successfully", "type": "success"})
 
     except Exception as e:
         db.session.rollback()
@@ -1104,3 +1122,24 @@ def debug_content():
         )
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@main.route("/api/query/<int:id>", methods=["GET"])
+@login_required
+def api_get_query(id):
+    try:
+        query = Query.query.get_or_404(id)
+        
+        return jsonify({
+            "type": "success",
+            "query": {
+                "id": query.id,
+                "question": query.question,
+                "answer": query.answer or "",  # Use stored answer
+                "answer_found": query.answer_found,
+                "happy": query.happy,
+                "created_at": query.created_at.strftime('%Y-%m-%d %H:%M')
+            }
+        })
+    except Exception as e:
+        return jsonify({"type": "error", "message": str(e)}), 500

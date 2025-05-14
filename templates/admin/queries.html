@@ -31,6 +31,7 @@
                             <th>Answer Found</th>
                             <th>User Feedback</th>
                             <th>Created At</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -55,6 +56,17 @@
                                 {% endif %}
                             </td>
                             <td>{{ query.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>
+                                {% if query.answer_found and query.happy %}
+                                <button class="btn btn-sm btn-success" onclick="addToFAQ({{ query.id }}, true)">
+                                    <i class="fas fa-plus"></i> Add to FAQ
+                                </button>
+                                {% else %}
+                                <button class="btn btn-sm btn-primary" onclick="addToFAQ({{ query.id }}, false)">
+                                    <i class="fas fa-edit"></i> Write Answer & Add
+                                </button>
+                                {% endif %}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -64,50 +76,107 @@
     </div>
 </div>
 
-<!-- View Query Modal -->
-<div class="modal fade" id="viewQueryModal" tabindex="-1">
+<!-- Add to FAQ Modal -->
+<div class="modal fade" id="addToFAQModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Query Details</h5>
+                <h5 class="modal-title">Add to FAQ</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <h6>Question</h6>
-                    <p id="viewQueryQuestion" class="text-muted"></p>
+            <form id="addToFAQForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Question</label>
+                        <input type="text" class="form-control" id="faqQuestion" name="question" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Answer</label>
+                        <textarea class="form-control" id="faqAnswer" name="answer" rows="5" required></textarea>
+                    </div>
                 </div>
-                <div class="mb-3">
-                    <h6>Answer</h6>
-                    <p id="viewQueryAnswer" class="text-muted"></p>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="submit" class="btn btn-primary">Save FAQ</button>
                 </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            </div>
+            </form>
         </div>
     </div>
 </div>
+
 {% endblock %}
 
 {% block extra_js %}
 <script>
-function viewQuery(id) {
-    fetch(`/api/query/${id}`)
+let currentQueryId = null;
+
+function addToFAQ(queryId, useExisting) {
+    currentQueryId = queryId;
+    
+    fetch(`/api/query/${queryId}`)
         .then(response => response.json())
         .then(data => {
             if (data.type === 'success') {
-                document.getElementById('viewQueryQuestion').textContent = data.query.question;
-                document.getElementById('viewQueryAnswer').textContent = data.query.answer;
-                new bootstrap.Modal(document.getElementById('viewQueryModal')).show();
+                document.getElementById('faqQuestion').value = data.query.question;
+                
+                if (useExisting) {
+                    // If using existing answer, directly submit
+                    document.getElementById('faqAnswer').value = data.query.answer;
+                    submitFAQ();
+                } else {
+                    // Show modal for custom answer
+                    document.getElementById('faqAnswer').value = '';
+                    new bootstrap.Modal(document.getElementById('addToFAQModal')).show();
+                }
             } else {
-                toastr.error(data.message);
+                toastr.error(data.message || 'Failed to fetch query details');
             }
         })
         .catch(error => {
-            toastr.error('An error occurred while fetching the query');
+            console.error('Error:', error);
+            toastr.error('An error occurred while fetching query details');
         });
 }
+
+function submitFAQ() {
+    const question = document.getElementById('faqQuestion').value;
+    const answer = document.getElementById('faqAnswer').value;
+    
+    fetch('/api/faq', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            question: question,
+            answer: answer,
+            query_id: currentQueryId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.type === 'success') {
+            toastr.success(data.message || 'FAQ added successfully');
+            // Close modal if open
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addToFAQModal'));
+            if (modal) modal.hide();
+            // Reload page after short delay
+            setTimeout(() => window.location.reload(), 1000);
+        } else {
+            toastr.error(data.message || 'Failed to add FAQ');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        toastr.error('An error occurred while adding FAQ');
+    });
+}
+
+// Handle form submission
+document.getElementById('addToFAQForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    submitFAQ();
+});
 
 function deleteAllQueries() {
     if (confirm('Are you sure you want to delete all queries? This action cannot be undone.')) {
@@ -132,43 +201,5 @@ function deleteAllQueries() {
         });
     }
 }
-
-// Handle form submissions
-document.getElementById('answerQueryForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const formData = new FormData(this);
-    
-    // Show loading state
-    const submitButton = this.querySelector('button[type="submit"]');
-    const originalButtonText = submitButton.innerHTML;
-    submitButton.disabled = true;
-    submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-
-    fetch(this.action, {
-        method: 'POST',
-        body: formData
-    }).then(response => response.json())
-    .then(data => {
-        if (data.type === 'success') {
-            // Close the modal first
-            const modal = bootstrap.Modal.getInstance(document.getElementById('answerQueryModal'));
-            modal.hide();
-            
-            toastr.success(data.message);
-            setTimeout(() => window.location.reload(), 1000);
-        } else {
-            toastr.error(data.message);
-            // Reset button state
-            submitButton.disabled = false;
-            submitButton.innerHTML = originalButtonText;
-        }
-    })
-    .catch(error => {
-        toastr.error('An error occurred while saving the answer');
-        // Reset button state
-        submitButton.disabled = false;
-        submitButton.innerHTML = originalButtonText;
-    });
-});
 </script>
 {% endblock %} 

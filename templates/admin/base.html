@@ -90,7 +90,9 @@
         <!-- Sidebar -->
         <div class="sidebar">
             <div class="logo-container">
-                <h4 class="text-white">{{ settings.get('logo', 'ChatBot') }}</h4>
+                <a href="{{ url_for('main.index') }}" target="_blank" style="text-decoration: none;">
+                    <h4 class="text-white">{{ settings.get('logo', 'ChatBot') }}</h4>
+                </a>
             </div>
             <div class="nav flex-column">
                 <a href="{{ url_for('main.admin_dashboard') }}" class="nav-link {% if request.endpoint == 'main.admin_dashboard' %}active{% endif %}">

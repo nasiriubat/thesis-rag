@@ -52,6 +52,7 @@ class File(db.Model):
 class Query(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     question = db.Column(db.Text, nullable=False)
+    answer = db.Column(db.Text, nullable=True)  # Store the generated answer
     answer_found = db.Column(db.Boolean, default=False)
     happy = db.Column(db.Boolean, default=False)
     language = db.Column(db.String(2), default='en')  # Store language code (en/fi)
