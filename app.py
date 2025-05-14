@@ -1,6 +1,7 @@
 import os
 from flask import Flask
 from flask_login import LoginManager, current_user
+from flask_migrate import Migrate
 import openai
 from config import config
 from models import db
@@ -18,6 +19,7 @@ def create_app(config_name='default'):
     
     # Initialize extensions with app
     db.init_app(app)
+    migrate = Migrate(app, db)  # Initialize Flask-Migrate
     login_manager.init_app(app)
     
     # Import models after db initialization

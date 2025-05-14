@@ -9,6 +9,7 @@ from flask import (
     session,
     current_app,
 )
+from sqlalchemy import func
 from flask_login import login_user, login_required, logout_user, current_user
 from models import db, User, Role, FAQ, File, Query, Settings, NewQuestion
 from urllib.parse import urlparse
@@ -22,7 +23,7 @@ from embed_and_search import (
     split_into_chunks,
     create_embedding,
 )
-import openai
+from openai import OpenAI
 import json
 import numpy as np
 import uuid
@@ -62,12 +63,38 @@ def contact():
 def chat():
     data = request.json
     question = data.get("question")
+    language = data.get("language", "en")  # default to English
 
     if not question:
         return jsonify({"error": "No question provided", "type": "error"}), 400
 
     try:
-        # Check if OpenAI key is configured
+
+        def save_query(answer_found=True):
+            query = Query(
+                question=question,
+                answer_found=answer_found,
+                happy=True,
+                language=language,
+            )
+            db.session.add(query)
+            db.session.commit()
+            return query
+
+        # 1. Check if exact match exists in FAQ
+        faq = FAQ.query.filter(func.lower(FAQ.question) == question.lower()).first()
+        if faq:
+            query = save_query()
+            return jsonify(
+                {
+                    "answer": faq.answer,
+                    "type": "success",
+                    "query_id": query.id,
+                    "faq_id": faq.id,
+                }
+            )
+
+        # 2. Ensure OpenAI key is set
         openai_key = Settings.query.filter_by(key="openai_key").first()
         if not openai_key or not openai_key.value:
             return (
@@ -80,76 +107,75 @@ def chat():
                 400,
             )
 
-        openai.api_key = openai_key.value
+        # 3. Search across file embeddings
+        files = File.query.all()
+        file_ids = [f.file_identifier for f in files if f.file_identifier]
+        file_id_to_title = {
+            f.file_identifier: f.original_filename for f in files if f.file_identifier
+        }
 
-        # Get all file IDs and FAQ IDs from the database
-        file_ids = [str(f.id) for f in File.query.all()]
-        faq_ids = [f"faq_{f.id}" for f in FAQ.query.all()]
+        if not file_ids:
+            return handle_no_content(question, language)
 
-        # Search for relevant content
-        results = search_across_indices(question, file_ids + faq_ids)
-
-        # Create context from results
-        context = "\n".join([r["chunk"] for r in results])
-
+        results = search_across_indices(question, file_ids, top_k=5)
         if not results:
-            # If no results found, add to new questions
-            new_question = NewQuestion(question=question)
-            db.session.add(new_question)
-            db.session.commit()
+            return handle_no_content(question, language)
 
-            # Generate embedding for the new question
-            embedding = generate_and_store_embeddings(
-                question, f"new_question_{new_question.id}"
-            )
-            new_question.embedding = json.dumps(embedding)
-            db.session.commit()
+        # 4. Build context from results
+        context = "\n\n".join(
+            [
+                f"Relevant content from {file_id_to_title[r['file_id']]}:\n{r['chunk']}"
+                for r in results
+                if r["file_id"] in file_id_to_title
+            ]
+        )
 
-            return jsonify(
-                {
-                    "answer": "I'm sorry, I couldn't find a specific answer to your question. I've noted it down and our team will review it.",
-                    "sources": [],
-                    "type": "info",
-                }
-            )
+        # 5. Generate answer via OpenAI
+        system_prompt = {
+            "en": "You are a helpful assistant. Use the following context to answer the question in English. If the context doesn't contain enough information to answer the question, say so:",
+            "fi": "Olet avulias assistentti. Käytä seuraavaa kontekstia vastataksesi kysymykseen suomeksi. Jos kontekstissa ei ole tarpeeksi tietoa vastataksesi kysymykseen, kerro niin:",
+        }
 
-        # Generate response using OpenAI
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
+        client = OpenAI(api_key=openai_key.value)
+        response = client.chat.completions.create(
+            model="gpt-4",
             messages=[
                 {
                     "role": "system",
-                    "content": "You are a helpful assistant. Use the following context to answer the question:",
+                    "content": system_prompt.get(language, system_prompt["en"]),
                 },
                 {
                     "role": "user",
                     "content": f"Context: {context}\n\nQuestion: {question}",
                 },
             ],
+            temperature=0.8,
+            max_tokens=500,
         )
+
         answer = response.choices[0].message.content
 
-        # Save query
-        query = Query(
-            question=question,
-            answer_found=bool(results),
-            happy=False,  # Default value, can be updated by user feedback
-        )
-        db.session.add(query)
-        db.session.commit()
+        # 6. Save query
+        query = save_query()
 
-        return jsonify(
-            {
-                "answer": answer,
-                "sources": [
-                    {"text": r["chunk"][:200] + "...", "score": r["score"]}
-                    for r in results
-                ],
-                "type": "success",
-            }
-        )
+        return jsonify({"answer": answer, "type": "success", "query_id": query.id})
+
     except Exception as e:
+        print(f"Error in chat route: {str(e)}")
         return jsonify({"error": str(e), "type": "error"}), 500
+
+
+def handle_no_content(question, language):
+    new_question = NewQuestion(question=question)
+    db.session.add(new_question)
+    db.session.commit()
+
+    message = {
+        "fi": "Valitettavasti en löytänyt vastausta kysymykseesi. Olen tallentanut sen ja tiimimme tarkistaa sen.",
+        "en": "I'm sorry, I couldn't find a specific answer to your question. I've noted it down and our team will review it.",
+    }.get(language, language["en"])
+
+    return jsonify({"answer": message, "type": "info"})
 
 
 # Admin routes
@@ -179,6 +205,9 @@ def admin_logout():
 @main.route("/admin")
 @login_required
 def admin_dashboard():
+    # Regenerate any missing embeddings
+    regenerate_missing_embeddings()
+
     users = User.query.all()
     faqs = FAQ.query.all()
     files = File.query.all()
@@ -316,12 +345,6 @@ def api_answer_new_question(id):
         faq = FAQ(question=new_question.question, answer=answer, ai=ai)
         db.session.add(faq)
 
-        # Generate embedding for the FAQ
-        embedding = generate_and_store_embeddings(
-            new_question.question, f"faq_{faq.id}"
-        )
-        faq.embedding = json.dumps(embedding)
-
         # Delete the new question
         db.session.delete(new_question)
         db.session.commit()
@@ -438,32 +461,19 @@ def api_create_faq():
         answer = request.form.get("answer")
 
         if not all([question, answer]):
-            return jsonify({"message": "Question and answer are required", "type": "error"}), 400
+            return (
+                jsonify(
+                    {"message": "Question and answer are required", "type": "error"}
+                ),
+                400,
+            )
 
         # Create FAQ record
         faq = FAQ(question=question, answer=answer)
         db.session.add(faq)
-        db.session.flush()  # Get the ID without committing
+        db.session.commit()  # Get the ID without committing
+        return jsonify({"message": "FAQ created successfully", "type": "success"})
 
-        try:
-            # Concatenate question and answer for embedding
-            combined_text = f"Question: {question}\nAnswer: {answer}"
-            
-            # Generate embeddings for the combined text
-            file_identifier = generate_and_store_embeddings(combined_text)
-            if not file_identifier:
-                raise Exception("Failed to generate embeddings")
-
-            # Store the embedding
-            faq.embedding = json.dumps(file_identifier)
-            db.session.commit()
-
-            return jsonify({"message": "FAQ created successfully", "type": "success"})
-        except Exception as e:
-            # If embedding generation fails, rollback the database transaction
-            db.session.rollback()
-            print(f"Error generating embeddings for FAQ: {str(e)}")
-            return jsonify({"message": f"Failed to generate embeddings: {str(e)}", "type": "error"}), 500
     except Exception as e:
         db.session.rollback()
         print(f"Error creating FAQ: {str(e)}")
@@ -602,7 +612,7 @@ def generate_filename(source, content=None):
     try:
         # Get current time for uniqueness
         current_time = datetime.now().strftime("%H%M")
-        
+
         if isinstance(source, str):  # URL or raw text
             if source.startswith(("http://", "https://")):
                 # For URLs, use the URL itself as the base name
@@ -648,15 +658,16 @@ def check_duplicate_filenames(files):
         safe_name = re.sub(r"[^\w\s-]", "", original_name)
         safe_name = re.sub(r"[-\s]+", "_", safe_name)
         base_filename = f"{safe_name}_"
-        
+
         # Check if any existing file starts with this base filename
-        existing = File.query.filter(File.original_filename.like(f"{base_filename}%")).first()
+        existing = File.query.filter(
+            File.original_filename.like(f"{base_filename}%")
+        ).first()
         if existing:
-            duplicate_files.append({
-                'original': file.filename,
-                'existing': existing.original_filename
-            })
-    
+            duplicate_files.append(
+                {"original": file.filename, "existing": existing.original_filename}
+            )
+
     return duplicate_files
 
 
@@ -665,19 +676,23 @@ def check_duplicate_url(url):
     try:
         # Normalize the URL by removing protocol and www
         parsed_url = urlparse(url)
-        normalized_url = parsed_url.netloc.replace("www.", "") + parsed_url.path.rstrip("/")
-        
+        normalized_url = parsed_url.netloc.replace("www.", "") + parsed_url.path.rstrip(
+            "/"
+        )
+
         # Get all files that were created from URLs
         url_files = File.query.filter(File.original_filename.like("url_%")).all()
-        
+
         for file in url_files:
             # Extract the URL part from the filename
             filename_parts = file.original_filename.split("_")
             if len(filename_parts) >= 3:  # url_domain_path_timestamp
-                stored_url = "_".join(filename_parts[1:-1])  # Remove 'url_' prefix and timestamp
+                stored_url = "_".join(
+                    filename_parts[1:-1]
+                )  # Remove 'url_' prefix and timestamp
                 if stored_url == normalized_url:
                     return True, file.original_filename
-        
+
         return False, None
     except Exception as e:
         print(f"Error checking duplicate URL: {str(e)}")
@@ -704,11 +719,10 @@ def api_upload_file():
                 # Create a detailed error message listing all duplicates
                 error_message = "The following files already exist:\n"
                 for dup in duplicate_files:
-                    error_message += f"- {dup['original']} (exists as: {dup['existing']})\n"
-                return jsonify({
-                    "message": error_message,
-                    "type": "error"
-                }), 400
+                    error_message += (
+                        f"- {dup['original']} (exists as: {dup['existing']})\n"
+                    )
+                return jsonify({"message": error_message, "type": "error"}), 400
 
             success_count = 0
             error_messages = []
@@ -769,10 +783,15 @@ def api_upload_file():
             # Check for duplicate URL
             is_duplicate, existing_file = check_duplicate_url(url)
             if is_duplicate:
-                return jsonify({
-                    "message": f"This URL has already been processed (stored as: {existing_file})",
-                    "type": "error"
-                }), 400
+                return (
+                    jsonify(
+                        {
+                            "message": f"This URL has already been processed (stored as: {existing_file})",
+                            "type": "error",
+                        }
+                    ),
+                    400,
+                )
 
             print(f"Processing URL: {url}")
             text = extract_text_from_file(url)
@@ -875,64 +894,30 @@ def delete_associated_files(file_identifier):
 def api_manage_faq(faq_id):
     try:
         faq = FAQ.query.get_or_404(faq_id)
-        
-        if request.method == 'DELETE':
-            # Delete associated files if they exist
-            if hasattr(faq, 'file_identifier') and faq.file_identifier:
-                try:
-                    embeddings_file = Path("dataembedding") / f"{faq.file_identifier}_embeddings.npy"
-                    chunks_file = Path("dataembedding") / f"{faq.file_identifier}_chunks.json"
-                    
-                    if embeddings_file.exists():
-                        embeddings_file.unlink()
-                    if chunks_file.exists():
-                        chunks_file.unlink()
-                except Exception as e:
-                    print(f"Error deleting files: {e}")
-            
+
+        if request.method == "DELETE":
             db.session.delete(faq)
             db.session.commit()
             return jsonify({"message": "FAQ deleted successfully"})
-        
-        elif request.method == 'PUT':
+
+        elif request.method == "PUT":
             data = request.get_json()
-            if not data or 'question' not in data or 'answer' not in data:
+            if not data or "question" not in data or "answer" not in data:
                 return jsonify({"error": "Question and answer are required"}), 400
-            
-            # Delete old files if they exist
-            if hasattr(faq, 'file_identifier') and faq.file_identifier:
-                try:
-                    old_embeddings_file = Path("dataembedding") / f"{faq.file_identifier}_embeddings.npy"
-                    old_chunks_file = Path("dataembedding") / f"{faq.file_identifier}_chunks.json"
-                    
-                    if old_embeddings_file.exists():
-                        old_embeddings_file.unlink()
-                    if old_chunks_file.exists():
-                        old_chunks_file.unlink()
-                except Exception as e:
-                    print(f"Error deleting old files: {e}")
-            
+
             # Update FAQ content
-            faq.question = data['question']
-            faq.answer = data['answer']
-            
-            # Generate new embeddings
-            combined_text = f"{data['question']} {data['answer']}"
+
             try:
-                file_identifier = generate_and_store_embeddings(combined_text)
-                if file_identifier:
-                    # Store the file_identifier in the embedding field
-                    faq.embedding = json.dumps(file_identifier)
-                    db.session.commit()
-                    return jsonify({"message": "FAQ updated successfully"})
-                else:
-                    db.session.rollback()
-                    return jsonify({"error": "Failed to generate embeddings"}), 500
+                faq.question = data["question"]
+                faq.answer = data["answer"]
+                db.session.commit()
+                return jsonify({"message": "FAQ updated successfully"})
+
             except Exception as e:
                 db.session.rollback()
                 print(f"Error generating embeddings: {e}")
                 return jsonify({"error": str(e)}), 500
-    
+
     except Exception as e:
         db.session.rollback()
         print(f"Error managing FAQ: {e}")
@@ -1017,14 +1002,94 @@ def chat_feedback(query_id):
     try:
         data = request.get_json()
         feedback = data.get("feedback")
-        
+        message = data.get("message")
+        language = data.get("language", "en")
+
         if feedback not in ["like", "dislike"]:
             return jsonify({"error": "Invalid feedback type"}), 400
-            
+
         query = Query.query.get_or_404(query_id)
         query.happy = feedback == "like"
+        # if feedback == "dislike":
+        #     query.answer = message
         db.session.commit()
-        
-        return jsonify({"message": "Feedback recorded successfully"})
+
+        # Return success message in the selected language
+        if language == "fi":
+            message = "Kiitos palautteestasi!"
+        else:
+            message = "Thank you for your feedback!"
+
+        return jsonify({"message": message})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+def regenerate_missing_embeddings():
+    """Regenerate embeddings for records that are missing them."""
+    try:
+        # Check Files
+        files = File.query.filter_by(file_identifier=None).all()
+        for file in files:
+            file_identifier = generate_and_store_embeddings(file.text)
+            if file_identifier:
+                file.file_identifier = file_identifier
+                print(f"Regenerated embedding for file {file.id}")
+
+        # Check FAQs
+        faqs = FAQ.query.filter_by(embedding=None).all()
+        for faq in faqs:
+            combined_text = f"Question: {faq.question}\nAnswer: {faq.answer}"
+            file_identifier = generate_and_store_embeddings(combined_text)
+            if file_identifier:
+                faq.embedding = json.dumps(file_identifier)
+                print(f"Regenerated embedding for FAQ {faq.id}")
+
+        db.session.commit()
+        return True
+    except Exception as e:
+        print(f"Error regenerating embeddings: {e}")
+        db.session.rollback()
+        return False
+
+
+@main.route("/debug/content")
+@login_required
+def debug_content():
+    """Debug route to check content in the database."""
+    try:
+        files = File.query.all()
+        faqs = FAQ.query.all()
+
+        file_info = [
+            {
+                "id": f.id,
+                "filename": f.original_filename,
+                "has_identifier": bool(f.file_identifier),
+                "identifier": f.file_identifier,
+            }
+            for f in files
+        ]
+
+        faq_info = [
+            {
+                "id": f.id,
+                "question": (
+                    f.question[:50] + "..." if len(f.question) > 50 else f.question
+                ),
+                "has_embedding": bool(f.embedding),
+                "embedding": f.embedding,
+            }
+            for f in faqs
+        ]
+
+        return jsonify(
+            {
+                "files": file_info,
+                "faqs": faq_info,
+                "file_count": len(files),
+                "faq_count": len(faqs),
+            }
+        )
     except Exception as e:
         return jsonify({"error": str(e)}), 500

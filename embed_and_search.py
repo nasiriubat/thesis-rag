@@ -104,20 +104,24 @@ def calculate_relevance_score(chunk: str, query: str, base_score: float) -> floa
 
 def generate_and_store_embeddings(text: str) -> Optional[str]:
     file_id = str(uuid.uuid4())
+    print(f"Debug - Generating embeddings for text (first 100 chars): {text[:100]}...")
+    
     chunks = split_into_chunks(text)
+    print(f"Debug - Split into {len(chunks)} chunks")
     
     if not chunks:
         print("No valid chunks created from input text")
         return None
     
-    print(f"Debug - Generated {len(chunks)} chunks")
-    
     # Generate embeddings for all chunks
     embeddings = []
-    for chunk in tqdm(chunks, desc="Generating embeddings"):
+    for i, chunk in enumerate(tqdm(chunks, desc="Generating embeddings")):
         embedding = create_embedding(chunk)
         if embedding is not None:
             embeddings.append(embedding)
+            print(f"Debug - Generated embedding {i+1}/{len(chunks)}")
+        else:
+            print(f"Debug - Failed to generate embedding for chunk {i+1}")
     
     if not embeddings:
         print("No embeddings generated for the text")
@@ -126,10 +130,12 @@ def generate_and_store_embeddings(text: str) -> Optional[str]:
     try:
         # Convert embeddings to numpy array
         embeddings_np = np.array(embeddings, dtype=np.float32)
+        print(f"Debug - Created numpy array of shape {embeddings_np.shape}")
         
         # Save embeddings and chunks
         embeddings_file = EMBEDDINGS_FOLDER / f"{file_id}_embeddings.npy"
         np.save(embeddings_file, embeddings_np)
+        print(f"Debug - Saved embeddings to {embeddings_file}")
         
         # Save chunks and metadata
         chunks_file = EMBEDDINGS_FOLDER / f"{file_id}_chunks.json"
@@ -138,8 +144,8 @@ def generate_and_store_embeddings(text: str) -> Optional[str]:
                 'chunks': chunks,
                 'file_id': file_id
             }, f, ensure_ascii=False)
+        print(f"Debug - Saved chunks to {chunks_file}")
         
-        print(f"Debug - Saved embeddings and chunks for file_id: {file_id}")
         return file_id
     except Exception as e:
         print(f"Error storing embeddings: {e}")

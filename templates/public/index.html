@@ -118,11 +118,14 @@ function askQuestion(question) {
     // Show loading message
     const loadingId = addMessage(getTranslation('thinking', currentLanguage), 'bot', true);
     
-    // Send request to server
+    // Send request to server with language
     fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: question })
+        body: JSON.stringify({ 
+            question: question,
+            language: currentLanguage 
+        })
     })
     .then(response => response.json())
     .then(data => {
@@ -131,6 +134,12 @@ function askQuestion(question) {
         
         // Add bot response with query ID
         const messageId = addMessage(data.answer, 'bot');
+        
+        // Store query ID in the message element for feedback
+        const messageElement = document.getElementById(messageId);
+        if (messageElement && data.query_id) {
+            messageElement.setAttribute('data-query-id', data.query_id);
+        }
         
         // Add sources if available
         if (data.sources && data.sources.length > 0) {
@@ -169,10 +178,10 @@ function addMessage(text, sender, isTemporary = false) {
     if (sender === 'bot' && !isTemporary) {
         content += `
             <div class="feedback-buttons mt-2">
-                <button class="btn btn-sm btn-outline-success me-2" onclick="submitFeedback(${messageId}, 'like')">
+                <button class="btn btn-sm btn-outline-success me-2" onclick="submitFeedback('${messageId}', 'like','${text}')">
                     <i class="fas fa-thumbs-up"></i> ${getTranslation('helpful', currentLanguage)}
                 </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="submitFeedback(${messageId}, 'dislike')">
+                <button class="btn btn-sm btn-outline-danger" onclick="submitFeedback('${messageId}', 'dislike','${text}')">
                     <i class="fas fa-thumbs-down"></i> ${getTranslation('notHelpful', currentLanguage)}
                 </button>
             </div>
@@ -185,9 +194,15 @@ function addMessage(text, sender, isTemporary = false) {
     return messageId;
 }
 
-function submitFeedback(messageId, feedback) {
-    // Get the query ID from the message ID
-    const queryId = messageId.split('-')[1];
+function submitFeedback(messageId, feedback, text) {
+    // Get the query ID from the message element
+    const messageElement = document.getElementById(messageId);
+    const queryId = messageElement.getAttribute('data-query-id');
+    
+    if (!queryId) {
+        toastr.error(getTranslation('errorFeedback', currentLanguage));
+        return;
+    }
     
     // Send feedback to server
     fetch(`/api/chat/${queryId}/feedback`, {
@@ -195,7 +210,11 @@ function submitFeedback(messageId, feedback) {
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ feedback: feedback })
+        body: JSON.stringify({ 
+            feedback: feedback,
+            language: currentLanguage,
+            message: text
+        })
     })
     .then(response => response.json())
     .then(data => {

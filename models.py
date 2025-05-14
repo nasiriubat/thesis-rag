@@ -35,7 +35,7 @@ class FAQ(db.Model):
     question = db.Column(db.Text, nullable=False)
     answer = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    embedding = db.Column(db.Text)  # Store JSON-encoded embedding string
+    embedding = db.Column(db.Text,nullable=True)  # Store JSON-encoded embedding string
 
 # Uploaded file details
 class File(db.Model):
@@ -54,6 +54,7 @@ class Query(db.Model):
     question = db.Column(db.Text, nullable=False)
     answer_found = db.Column(db.Boolean, default=False)
     happy = db.Column(db.Boolean, default=False)
+    language = db.Column(db.String(2), default='en')  # Store language code (en/fi)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 # Unanswered visitor questions
@@ -61,7 +62,7 @@ class NewQuestion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     question = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    embedding = db.Column(db.Text)  # Store the embedding for semantic search
+    embedding = db.Column(db.Text,nullable=True)  # Store the embedding for semantic search
 
 # Settings model to store site-wide configurable text fields
 class Settings(db.Model):
