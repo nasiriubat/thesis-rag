@@ -69,7 +69,6 @@ def chat():
         return jsonify({"error": "No question provided", "type": "error"}), 400
 
     try:
-
         def save_query(answer_found=True):
             query = Query(
                 question=question,
@@ -119,7 +118,19 @@ def chat():
 
         results = search_across_indices(question, file_ids, top_k=5)
         if not results:
-            return handle_no_content(question, language)
+            # Save query with answer_found=False and return no content message
+            query = save_query(answer_found=False)
+            message = {
+                "fi": "Valitettavasti en löytänyt vastausta kysymykseesi. Olen tallentanut sen ja tiimimme tarkistaa sen.",
+                "en": "I'm sorry, I couldn't find a specific answer to your question. I've noted it down and our team will review it.",
+            }.get(language, "en")
+            
+            # Create new question for review
+            new_question = NewQuestion(question=question)
+            db.session.add(new_question)
+            db.session.commit()
+            
+            return jsonify({"answer": message, "type": "info", "query_id": query.id})
 
         # 4. Build context from results
         context = "\n\n".join(

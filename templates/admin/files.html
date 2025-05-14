@@ -32,7 +32,6 @@
                         <tr>
                             <th>ID</th>
                             <th>Content Preview</th>
-                            <th>Summary</th>
                             <th>Uploaded By</th>
                             <th>Created At</th>
                             <th>Actions</th>
@@ -44,7 +43,6 @@
                         <tr data-file-id="{{ file.id }}">
                             <td>{{ file.id }}</td>
                             <td>{{ file.text[:100] }}{% if file.text|length > 100 %}...{% endif %}</td>
-                            <td>{{ file.summary[:100] if file.summary else '-' }}{% if file.summary and file.summary|length > 100 %}...{% endif %}</td>
                             <td>{{ file.user.name }}</td>
                             <td>{{ file.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                             <td>

@@ -73,7 +73,7 @@ def calculate_relevance_score(chunk: str, query: str, base_score: float) -> floa
     
     # Split query into words and remove common words
     query_words = set(re.findall(r'\w+', query_lower))
-    common_words = {'what', 'does', 'do', 'is', 'are', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
+    common_words = {'what', 'does', 'do', 'is', 'are', 'the', 'a', 'an', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'who'}
     query_words = query_words - common_words
     
     if not query_words:
@@ -87,17 +87,28 @@ def calculate_relevance_score(chunk: str, query: str, base_score: float) -> floa
     
     # Check for exact phrase matches (more weight)
     exact_phrase_match = query_lower in chunk_lower
-    phrase_bonus = 0.2 if exact_phrase_match else 0
+    phrase_bonus = 0.3 if exact_phrase_match else 0
+    
+    # Check for consecutive word matches (good for names)
+    query_words_list = [w for w in re.findall(r'\w+', query_lower) if w not in common_words]
+    if len(query_words_list) > 1:
+        consecutive_matches = 0
+        for i in range(len(query_words_list) - 1):
+            if f"{query_words_list[i]} {query_words_list[i+1]}" in chunk_lower:
+                consecutive_matches += 1
+        consecutive_bonus = 0.2 * (consecutive_matches / (len(query_words_list) - 1)) if len(query_words_list) > 1 else 0
+    else:
+        consecutive_bonus = 0
     
     # Check for semantic similarity bonus
     semantic_bonus = 0.1 if base_score > 0.5 else 0
     
     # Combine scores with weights
-    final_score = (0.4 * base_score) + (0.3 * word_match_ratio) + phrase_bonus + semantic_bonus
+    final_score = (0.3 * base_score) + (0.3 * word_match_ratio) + phrase_bonus + consecutive_bonus + semantic_bonus
     
     # Debug output
     print(f"Debug - Chunk: {chunk[:100]}...")
-    print(f"Debug - Score components: base={base_score:.3f}, word_match={word_match_ratio:.3f}, phrase_bonus={phrase_bonus}, semantic_bonus={semantic_bonus}")
+    print(f"Debug - Score components: base={base_score:.3f}, word_match={word_match_ratio:.3f}, phrase_bonus={phrase_bonus}, consecutive_bonus={consecutive_bonus}, semantic_bonus={semantic_bonus}")
     print(f"Debug - Final score: {final_score:.3f}")
     
     return final_score
