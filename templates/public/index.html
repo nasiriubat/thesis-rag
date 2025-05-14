@@ -189,8 +189,20 @@ function addMessage(text, sender, isTemporary = false) {
     }
     
     messageDiv.innerHTML = content;
-    chatMessages.appendChild(messageDiv);
+    
+    // Get the chat messages container
+    const chatMessages = document.getElementById('chatMessages');
+    
+    // Insert the new message at the beginning
+    if (chatMessages.firstChild) {
+        chatMessages.insertBefore(messageDiv, chatMessages.firstChild);
+    } else {
+        chatMessages.appendChild(messageDiv);
+    }
+    
+    // Scroll to the bottom to show the latest message
     chatMessages.scrollTop = chatMessages.scrollHeight;
+    
     return messageId;
 }
 
@@ -358,7 +370,7 @@ html, body {
 .faq-bullets li {
     margin-bottom: 1rem;
     font-size: 1rem;
-    list-style: disc inside;
+    list-style: circle;
 }
 
 
@@ -421,6 +433,8 @@ html, body {
     margin-bottom: 1rem;
     padding-right: 0.5rem;
     min-height: 0; /* Important for Firefox */
+    display: flex;
+    flex-direction: column-reverse;
 }
 
 .visitor-message {
