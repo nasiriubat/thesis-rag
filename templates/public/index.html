@@ -298,15 +298,16 @@ html, body {
     height: 100%;
     margin: 0;
     padding: 0;
-    overflow: hidden;
+    overflow: hidden; /* This might be better on .visitor-bg if it's meant to prevent body scroll */
 }
 
 .visitor-bg {
     height: 100vh;
-    background: #ede3f7;
+    /* background: #ede3f7; */
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-y: auto; /* Allow vertical scroll if content exceeds viewport */
+    overflow-x: hidden; /* Prevent horizontal scroll */
 }
 
 .visitor-navbar {
@@ -315,6 +316,7 @@ html, body {
     padding: 1rem;
     height: 60px;
     flex-shrink: 0;
+    width: 100%; /* Ensure navbar is full width */
 }
 
 .navbar-logo {
@@ -327,9 +329,13 @@ html, body {
 .main-content-wrapper {
     flex: 1;
     display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    flex-direction: column; /* This was already column, which is fine */
+    overflow: hidden; /* Let children handle their scroll if necessary */
     min-height: 0; /* Important for Firefox */
+    max-width: 1400px; /* Max width for the content area */
+    margin-left: auto;  /* Center the content area */
+    margin-right: auto; /* Center the content area */
+    width: 100%;       /* Use available width up to max-width */
 }
 
 .visitor-sidebar {
@@ -397,7 +403,7 @@ html, body {
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow: hidden; /* Keep or adjust */
     min-height: 0; /* Important for Firefox */
 }
 
@@ -496,6 +502,7 @@ html, body {
     letter-spacing: 1px;
     height: 50px;
     flex-shrink: 0;
+    width: 100%; /* Ensure footer is full width */
 }
 
 .visitor-info-btn {
