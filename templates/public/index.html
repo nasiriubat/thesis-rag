@@ -4,7 +4,7 @@
 <div class="visitor-bg">
     <!-- Navbar -->
     <nav class="visitor-navbar">
-        <div class="container-fluid">
+        <div class="container-fluid nav-main">
             <div class="d-flex justify-content-between align-items-center">
                 <h2 class="navbar-logo mb-0">{{ settings.get('logo', 'Guide GPT') }}</h2>
                 <div class="d-flex align-items-center">
@@ -318,6 +318,9 @@ html, body {
     flex-shrink: 0;
     width: 100%; /* Ensure navbar is full width */
 }
+.nav-main {
+    max-width: 1500px;
+}
 
 .navbar-logo {
     font-weight: 700;
@@ -336,6 +339,8 @@ html, body {
     margin-left: auto;  /* Center the content area */
     margin-right: auto; /* Center the content area */
     width: 100%;       /* Use available width up to max-width */
+    box-shadow: 0 2px 16px rgba(91,31,166,0.08);
+    padding: 0 0 0 1rem;
 }
 
 .visitor-sidebar {
@@ -400,6 +405,7 @@ html, body {
 
 .visitor-main-bg {
     background: #ede3f7;
+    /* background-color: #E9DDF2; */
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -408,7 +414,7 @@ html, body {
 }
 
 .visitor-chat-container {
-    background: #fff;
+    /* background: #fff;     */
     box-shadow: 0 2px 16px rgba(91,31,166,0.08);
     padding: 2rem;
     height: 100%;
@@ -450,8 +456,8 @@ html, body {
 }
 
 .user-message .visitor-message-content {
-    background: #ede3f7;
-    color: #5b1fa6;
+    background: #d1aff3;
+    color: #000000;
     align-self: flex-end;
     border-radius: 12px 12px 0 12px;
     padding: 0.75rem 1rem;
