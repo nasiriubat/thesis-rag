@@ -1,10 +1,28 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="container py-5">
-    <div class="row">
-        <div class="col-md-8 mx-auto">
-            <h1 class="mb-4">About Us</h1>
+<div class="visitor-bg">
+    <!-- Navbar -->
+    <nav class="visitor-navbar">
+        <div class="container-fluid nav-main">
+            <div class="d-flex justify-content-between align-items-center">
+                <a href="{{ url_for('main.index') }}" class="text-decoration-none">
+                    <h2 class="navbar-logo mb-0">{{ settings.get('logo', 'Guide GPT') }}</h2>
+                </a>
+                <div class="d-flex align-items-center">
+                    <a href="{{ url_for('main.contact') }}" class="btn btn-icon visitor-info-btn" title="Contact" data-translate="contact">
+                        <i class="fas fa-envelope"></i>
+                        <span class="nav-icon-text">Contact</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <div class="main-content-wrapper">
+        <div class="about-content p-4">
+            <h1 class="mb-4" data-translate="about">About Us</h1>
             <div class="card">
                 <div class="card-body">
                     {{ settings.get('about', '')|safe }}
@@ -12,12 +30,115 @@
             </div>
         </div>
     </div>
-</div>
 
-<!-- Footer -->
-<footer class="bg-light py-3 mt-auto">
-    <div class="container text-center">
-        <p class="mb-0">{{ settings.get('copyright', '') }}</p>
-    </div>
-</footer>
+    <!-- Footer -->
+    <footer class="visitor-footer text-center py-2">
+        <span>{{ settings.get('copyright', 'GPT Lab © 2024') }}</span>
+    </footer>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<style>
+.visitor-bg {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #5b1fa6 0%, #7c4dff 100%);
+    position: relative;
+}
+
+.visitor-navbar {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 1rem 0;
+}
+
+.nav-main {
+    padding: 0 2rem;
+}
+
+.about-content {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 2rem;
+}
+
+.about-content h1 {
+    color: #5b1fa6;
+    font-weight: 600;
+    font-size: 2rem;
+    margin-bottom: 1.5rem;
+}
+
+.card {
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.card-body {
+    padding: 1.5rem;
+    line-height: 1.6;
+}
+
+.visitor-info-btn {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 0.5rem 1.25rem;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.visitor-info-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    color: #fff;
+    text-decoration: none;
+    transform: translateY(-1px);
+}
+
+.visitor-info-btn i {
+    margin-right: 0.5rem;
+}
+
+.navbar-logo {
+    color: #fff;
+    font-weight: 600;
+    font-size: 1.75rem;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.navbar-logo:hover {
+    color: #fff;
+    text-decoration: none;
+    opacity: 0.9;
+}
+
+.visitor-footer {
+    background: rgba(0, 0, 0, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.9rem;
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+}
+
+@media (max-width: 768px) {
+    .nav-main {
+        padding: 0 1rem;
+    }
+    
+    .about-content {
+        margin: 1rem;
+        padding: 1.5rem;
+    }
+    
+    .about-content h1 {
+        font-size: 1.75rem;
+    }
+}
+</style>
 {% endblock %} 
