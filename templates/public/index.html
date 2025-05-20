@@ -6,7 +6,13 @@
     <nav class="visitor-navbar">
         <div class="container-fluid nav-main">
             <div class="d-flex justify-content-between align-items-center">
-                <h2 class="navbar-logo mb-0">{{ settings.get('logo', 'Guide GPT') }}</h2>
+                {% if settings.get('logo_file') %}
+                    <a href="{{ url_for('main.index') }}" class="navbar-logo-link">
+                        <img src="{{ url_for('static', filename='uploads/' + settings.get('logo_file')) }}" alt="{{ settings.get('logo', 'Guide GPT') }}" class="navbar-logo-img">
+                    </a>
+                {% else %}
+                    <h2 class="navbar-logo mb-0">{{ settings.get('logo', 'Guide GPT') }}</h2>
+                {% endif %}
                 <div class="d-flex align-items-center">
                     <!-- Language Toggle -->
                     <div class="language-toggle me-3">
@@ -45,7 +51,7 @@
     <div class="mobile-menu-overlay" id="mobileMenu">
         <div class="mobile-menu-content">
             <div class="mobile-menu-header">
-                <h3 class="sidebar-title mb-3" data-translate="faq">FAQ</h3>
+                <h3 class="sidebar-title mb-3 text-light" data-translate="faq">FAQ</h3>
                 <hr class="sidebar-divider">
             </div>
             <div class="mobile-menu-faq-list">
@@ -391,6 +397,9 @@ html, body {
 }
 
 .visitor-navbar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: #5b1fa6;
     color: #fff;
     padding: 1rem;
@@ -1086,6 +1095,24 @@ html, body {
 
 .hamburger-btn.active span:nth-child(3) {
     transform: translateY(-11px) rotate(-45deg);
+}
+
+.navbar-logo-link {
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+}
+
+.navbar-logo-img {
+    height: 40px;
+    width: auto;
+    object-fit: contain;
+}
+
+@media (max-width: 768px) {
+    .navbar-logo-img {
+        height: 32px;
+    }
 }
 </style>
 {% endblock %} 

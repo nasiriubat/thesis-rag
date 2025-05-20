@@ -34,6 +34,7 @@ import re
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api.formatters import TextFormatter
 from pathlib import Path
+from werkzeug.utils import secure_filename
 
 # Create blueprint
 main = Blueprint("main", __name__)
@@ -301,6 +302,10 @@ def admin_queries():
 def admin_settings():
     if request.method == "POST":
         try:
+            # Handle file uploads
+            upload_dir = os.path.join(current_app.static_folder, 'uploads')
+            os.makedirs(upload_dir, exist_ok=True)
+
             settings_to_update = {
                 "logo": request.form.get("logo"),
                 "openai_key": request.form.get("openai_key"),
@@ -308,6 +313,36 @@ def admin_settings():
                 "about": request.form.get("about"),
                 "contact": request.form.get("contact"),
             }
+
+            # Handle logo file upload
+            logo_file = request.files.get('logo_file')
+            if logo_file and logo_file.filename:
+                # Delete old logo if exists
+                old_logo = Settings.query.filter_by(key='logo_file').first()
+                if old_logo and old_logo.value:
+                    old_logo_path = os.path.join(upload_dir, old_logo.value)
+                    if os.path.exists(old_logo_path):
+                        os.remove(old_logo_path)
+                
+                # Save new logo
+                filename = secure_filename(logo_file.filename)
+                logo_file.save(os.path.join(upload_dir, filename))
+                settings_to_update['logo_file'] = filename
+
+            # Handle favicon file upload
+            favicon_file = request.files.get('favicon_file')
+            if favicon_file and favicon_file.filename:
+                # Delete old favicon if exists
+                old_favicon = Settings.query.filter_by(key='favicon_file').first()
+                if old_favicon and old_favicon.value:
+                    old_favicon_path = os.path.join(upload_dir, old_favicon.value)
+                    if os.path.exists(old_favicon_path):
+                        os.remove(old_favicon_path)
+                
+                # Save new favicon
+                filename = secure_filename(favicon_file.filename)
+                favicon_file.save(os.path.join(upload_dir, filename))
+                settings_to_update['favicon_file'] = filename
 
             for key, value in settings_to_update.items():
                 setting = Settings.query.filter_by(key=key).first()

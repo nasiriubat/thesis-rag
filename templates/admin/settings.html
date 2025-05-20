@@ -10,6 +10,25 @@
     .ck-editor__editable {
         min-height: 200px;
     }
+    .image-preview {
+        max-width: 200px;
+        max-height: 200px;
+        margin-top: 10px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .preview-container {
+        margin-top: 10px;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        background: #f8f9fa;
+    }
+    .preview-label {
+        font-size: 0.9rem;
+        color: #666;
+        margin-bottom: 5px;
+    }
 </style>
 {% endblock %}
 
@@ -32,11 +51,38 @@
             <h6 class="m-0 font-weight-bold text-primary">General Settings</h6>
         </div>
         <div class="card-body">
-            <form method="POST" action="{{ url_for('main.admin_settings') }}">
+            <form method="POST" action="{{ url_for('main.admin_settings') }}" enctype="multipart/form-data">
                 <div class="mb-3">
                     <label for="logo" class="form-label required-field">Application Name</label>
                     <input type="text" class="form-control" id="logo" name="logo" value="{{ settings.get('logo', '') }}" required>
                 </div>
+                
+                <div class="mb-3">
+                    <label for="logo_file" class="form-label">Logo Image</label>
+                    <input type="file" class="form-control" id="logo_file" name="logo_file" accept="image/*">
+                    <div class="preview-container">
+                        <div class="preview-label">Current Logo:</div>
+                        {% if settings.get('logo_file') %}
+                            <img src="{{ url_for('static', filename='uploads/' + settings.get('logo_file')) }}" class="image-preview" id="logoPreview">
+                        {% else %}
+                            <div class="text-muted">No logo uploaded</div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="favicon_file" class="form-label">Favicon</label>
+                    <input type="file" class="form-control" id="favicon_file" name="favicon_file" accept="image/">
+                    <div class="preview-container">
+                        <div class="preview-label">Current Favicon:</div>
+                        {% if settings.get('favicon_file') %}
+                            <img src="{{ url_for('static', filename='uploads/' + settings.get('favicon_file')) }}" class="image-preview" id="faviconPreview">
+                        {% else %}
+                            <div class="text-muted">No favicon uploaded</div>
+                        {% endif %}
+                    </div>
+                </div>
+
                 <div class="mb-3">
                     <label for="openai_key" class="form-label required-field">OpenAI API Key</label>
                     <input type="password" class="form-control" id="openai_key" name="openai_key" value="{{ settings.get('openai_key', '') }}" required>
@@ -82,6 +128,29 @@ ClassicEditor
     .catch(error => {
         console.error(error);
     });
+
+// Image preview functionality
+function previewImage(input, previewId) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const preview = document.getElementById(previewId);
+            if (preview) {
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+            }
+        }
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+document.getElementById('logo_file').addEventListener('change', function() {
+    previewImage(this, 'logoPreview');
+});
+
+document.getElementById('favicon_file').addEventListener('change', function() {
+    previewImage(this, 'faviconPreview');
+});
 
 // Handle form submission
 document.querySelector('form').addEventListener('submit', function(e) {

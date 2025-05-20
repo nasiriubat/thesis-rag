@@ -7,7 +7,11 @@
         <div class="container-fluid nav-main">
             <div class="d-flex justify-content-between align-items-center">
                 <a href="{{ url_for('main.index') }}" class="text-decoration-none">
-                    <h2 class="navbar-logo mb-0">{{ settings.get('logo', 'Guide GPT') }}</h2>
+                    {% if settings.get('logo_file') %}
+                        <img src="{{ url_for('static', filename='uploads/' + settings.get('logo_file')) }}" alt="{{ settings.get('logo', 'Guide GPT') }}" class="navbar-logo-img">
+                    {% else %}
+                        <h2 class="navbar-logo mb-0">{{ settings.get('logo', 'Guide GPT') }}</h2>
+                    {% endif %}
                 </a>
                 <div class="d-flex align-items-center">
                     <a href="{{ url_for('main.contact') }}" class="btn btn-icon visitor-info-btn" title="Contact" data-translate="contact">
@@ -126,6 +130,12 @@
     width: 100%;
 }
 
+.navbar-logo-img {
+    height: 40px;
+    width: auto;
+    object-fit: contain;
+}
+
 @media (max-width: 768px) {
     .nav-main {
         padding: 0 1rem;
@@ -138,6 +148,10 @@
     
     .about-content h1 {
         font-size: 1.75rem;
+    }
+    
+    .navbar-logo-img {
+        height: 32px;
     }
 }
 </style>
