@@ -65,6 +65,8 @@ def chat():
     data = request.json
     question = data.get("question")
     language = data.get("language", "en")  # default to English
+    history = data.get("history", [])
+    history_text = "\n".join(f"{h['role']}: {h['content']}" for h in history)
 
     if not question:
         return jsonify({"error": "No question provided", "type": "error"}), 400
@@ -119,7 +121,7 @@ def chat():
             return handle_no_content(question, language)
 
         results = search_across_indices(question, file_ids, top_k=5)
-        if not results:
+        if not results and not history_text:
             # Save query with answer_found=False and return no content message
             message = {
                 "fi": "Valitettavasti en löytänyt vastausta kysymykseesi. Olen tallentanut sen ja tiimimme tarkistaa sen.",
@@ -146,10 +148,10 @@ def chat():
 
         # 5. Generate answer via OpenAI
         system_prompt = {
-            "en": "You are a helpful assistant. Use the following context to answer the question in English. If the context doesn't contain enough information to answer the question, say so:",
+            "en": "You are a helpful assistant. Use the following context to answer the question in English. If the context doesn't contain enough information to answer the question, say so. And for casual greetings and chats, reply and ask how can i assist you.",
             "fi": "Olet avulias assistentti. Käytä seuraavaa kontekstia vastataksesi kysymykseen suomeksi. Jos kontekstissa ei ole tarpeeksi tietoa vastataksesi kysymykseen, kerro niin:",
         }
-
+        prompt_content = f"""Conversation so far:{history_text} User's latest question:{question}Retrieved context:{context}"""
         client = OpenAI(api_key=openai_key.value)
         response = client.chat.completions.create(
             model="gpt-4",
@@ -160,7 +162,8 @@ def chat():
                 },
                 {
                     "role": "user",
-                    "content": f"Context: {context}\n\nQuestion: {question}",
+                    # "content": f"Context: {context}\n\nQuestion: {question}",
+                    "content": prompt_content,
                 },
             ],
             temperature=0.8,

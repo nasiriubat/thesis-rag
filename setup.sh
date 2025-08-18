@@ -15,7 +15,8 @@ echo "🚀 Starting Flask app setup on Ubuntu..."
 echo "🐍 Setting up Python backend..."
 # Create virtual environment in the project root
 python3 -m venv venv
-source venv/bin/activate
+source venv/bin/activate // Activate the virtual environment in Linux
+.\venv\Scripts\activate # Activate the virtual environment in Windows
 
 echo "📦 Installing Python dependencies..."
 pip install -r requirements.txt
@@ -32,7 +33,7 @@ venv/bin/python init_db.py
 
 echo "🚀 Starting Flask app with PM2..."
 
-pm2 start venv/bin/python --name thesis-rag -- app.py
+pm2 start venv/bin/python --name ai-assistant -- app.py
 
 echo "💾 Saving PM2 process list..."
 pm2 save
@@ -42,7 +43,7 @@ echo "🚀 Enabling PM2 startup on boot..."
 # Example: sudo env PATH=$PATH:/usr/bin /usr/local/lib/node_modules/pm2/bin/pm2 startup systemd -u your_user --hp /home/your_user
 pm2 startup
 
-echo "✅ Setup complete. Your Flask application 'thesis-rag' should be running on port 8080 and managed by PM2."
+echo "✅ Setup complete. Your Flask application 'ai-assistant' should be running on port 8080 and managed by PM2."
 echo "👉 You might need to run the command output by 'pm2 startup' manually if this is the first time."
 echo "👀 Monitor your app with: pm2 list"
-echo "🪵 View logs with: pm2 logs thesis-rag"
+echo "🪵 View logs with: pm2 logs ai-assistant"

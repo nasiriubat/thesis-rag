@@ -142,6 +142,13 @@
 <!-- Add language.js before other scripts -->
 <script src="{{ url_for('static', filename='js/languages.js') }}"></script>
 <script>
+if (performance.navigation.type === performance.navigation.TYPE_RELOAD) {
+    // page is reloaded - clear history
+    sessionStorage.removeItem('chatHistory');
+} else {
+    // first visit in this tab - also clear
+    sessionStorage.removeItem('chatHistory');
+}
 let currentLanguage = initializeLanguage();
 
 function toggleLanguage() {
@@ -159,6 +166,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Function to ask a question from FAQ list or quick button
 function askQuestion(question) {
+    // console log history
+    console.log('Chat History:', getRecentHistory(10));
+
     // Hide initial FAQs if they are visible
     const initialFaqs = document.getElementById('initialFaqs');
     if (initialFaqs && initialFaqs.style.display !== 'none') {
@@ -167,6 +177,7 @@ function askQuestion(question) {
     
     // Add user message to chat immediately
     addMessage(question, 'user');
+    addToHistory('question', question);
     
     // Show loading message
     const loadingId = addMessage(getTranslation('thinking', currentLanguage), 'bot', true);
@@ -177,7 +188,8 @@ function askQuestion(question) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
             question: question,
-            language: currentLanguage 
+            language: currentLanguage ,
+            history: getRecentHistory(10)  // ✅ send last few turns
         })
     })
     .then(response => response.json())
@@ -187,6 +199,8 @@ function askQuestion(question) {
         
         // Add bot response with query ID
         const messageId = addMessage(data.answer, 'bot');
+        addToHistory('answer', data.answer);
+
         
         // Store query ID in the message element for feedback
         const messageElement = document.getElementById(messageId);
@@ -376,6 +390,16 @@ document.getElementById('mobileMenu').addEventListener('click', function(e) {
         toggleMobileMenu();
     }
 });
+function addToHistory(role, content) {
+    let history = JSON.parse(sessionStorage.getItem('chatHistory') || '[]');
+    history.push({ role, content });
+    sessionStorage.setItem('chatHistory', JSON.stringify(history));
+}
+
+function getRecentHistory(n = 10) {
+    let history = JSON.parse(sessionStorage.getItem('chatHistory') || '[]');
+    return history.slice(-n); // last N messages
+}
 </script>
 
 <style>

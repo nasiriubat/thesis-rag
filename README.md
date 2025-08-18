@@ -68,7 +68,7 @@ A Flask-based chatbot application that uses OpenAI's GPT model to answer questio
    ```bash
    python app.py
    ```
-   The application will be available at `http://localhost:5000`
+   The application will be available at `http://localhost:8080`
 
 2. **Production Mode**
    ```bash
