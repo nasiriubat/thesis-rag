@@ -76,6 +76,12 @@ A Flask-based chatbot application that uses OpenAI's GPT model to answer questio
    python app.py
    ```
 
+### Docker Container
+Minimal working example of Docker commands once everything else has been set up
+1. Create data path if not yet done: `mkdir datadir`
+2. Build Dockerfile & context into image, tagged "thesis-rag": `docker build . -t thesis-rag:latest`
+3. Run the tagged image "thesis-rag" and various volume mounts: `docker run --name thesis-rag -v .:/app -v ./datadir:/data -it -p 8080:8080 thesis-rag:latest`
+
 ## Project Structure
 
 ```
