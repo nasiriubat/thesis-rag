@@ -32,7 +32,7 @@ python init_db.py
 ```
 
 This will create:
-- Admin user (email: admin@gmail.com, password: 123456)
+- Admin user (email: admin@example.com, password: 123456)
 - Initial settings
 - Required database tables
 

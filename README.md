@@ -59,7 +59,7 @@ A Flask-based chatbot application that uses OpenAI's GPT model to answer questio
    ```
    This will:
    - Create the database tables
-   - Create an admin user (email: admin@gmail.com, password: 123456)
+   - Create an admin user (email: admin@example.com, password: 123456)
    - Set up initial application settings
 
 ## Running the Application
@@ -98,7 +98,7 @@ project/
 1. **Access the Admin Interface**
    - Go to `http://localhost:5000/admin/login`
    - Login with:
-     - Email: admin@gmail.com
+     - Email: admin@example.com
      - Password: 123456
 
 2. **Configure Settings**
