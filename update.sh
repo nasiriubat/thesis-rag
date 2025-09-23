@@ -11,7 +11,7 @@ git pull origin main
 source venv/bin/activate
 pip install -r requirements.txt
 flask db upgrade
-pm2 restart thesis-rag
+pm2 restart poricity
 
 
 echo "✅ App updated and restarted!"
