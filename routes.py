@@ -145,6 +145,13 @@ def chat():
                 if r["file_id"] in file_id_to_title
             ]
         )
+        used_files = list(
+            {
+                file_id_to_title[r["file_id"]]
+                for r in results
+                if r["file_id"] in file_id_to_title
+            }
+        )
 
         # 5. Generate answer via OpenAI
         system_prompt = {
@@ -167,10 +174,13 @@ def chat():
                 },
             ],
             temperature=0.8,
-            max_tokens=500,
+            max_tokens=800,
         )
 
         answer = response.choices[0].message.content
+        if used_files:
+            files_list = "\n".join(f"- {fname}" for fname in used_files)
+            answer = f"{answer}\n\n_Sources used:_\n{files_list}"
 
         # 6. Save query with the generated answer
         query = save_query(answer=answer)
@@ -306,7 +316,7 @@ def admin_settings():
     if request.method == "POST":
         try:
             # Handle file uploads
-            upload_dir = os.path.join(current_app.static_folder, 'uploads')
+            upload_dir = os.path.join(current_app.static_folder, "uploads")
             os.makedirs(upload_dir, exist_ok=True)
 
             settings_to_update = {
@@ -318,34 +328,34 @@ def admin_settings():
             }
 
             # Handle logo file upload
-            logo_file = request.files.get('logo_file')
+            logo_file = request.files.get("logo_file")
             if logo_file and logo_file.filename:
                 # Delete old logo if exists
-                old_logo = Settings.query.filter_by(key='logo_file').first()
+                old_logo = Settings.query.filter_by(key="logo_file").first()
                 if old_logo and old_logo.value:
                     old_logo_path = os.path.join(upload_dir, old_logo.value)
                     if os.path.exists(old_logo_path):
                         os.remove(old_logo_path)
-                
+
                 # Save new logo
                 filename = secure_filename(logo_file.filename)
                 logo_file.save(os.path.join(upload_dir, filename))
-                settings_to_update['logo_file'] = filename
+                settings_to_update["logo_file"] = filename
 
             # Handle favicon file upload
-            favicon_file = request.files.get('favicon_file')
+            favicon_file = request.files.get("favicon_file")
             if favicon_file and favicon_file.filename:
                 # Delete old favicon if exists
-                old_favicon = Settings.query.filter_by(key='favicon_file').first()
+                old_favicon = Settings.query.filter_by(key="favicon_file").first()
                 if old_favicon and old_favicon.value:
                     old_favicon_path = os.path.join(upload_dir, old_favicon.value)
                     if os.path.exists(old_favicon_path):
                         os.remove(old_favicon_path)
-                
+
                 # Save new favicon
                 filename = secure_filename(favicon_file.filename)
                 favicon_file.save(os.path.join(upload_dir, filename))
-                settings_to_update['favicon_file'] = filename
+                settings_to_update["favicon_file"] = filename
 
             for key, value in settings_to_update.items():
                 setting = Settings.query.filter_by(key=key).first()
@@ -399,7 +409,9 @@ def api_answer_new_question(id):
         db.session.delete(new_question)
         db.session.commit()
 
-        return jsonify({"message": "Question answered and added to FAQs", "type": "success"})
+        return jsonify(
+            {"message": "Question answered and added to FAQs", "type": "success"}
+        )
     except Exception as e:
         print(f"Error in api_answer_new_question: {str(e)}")
         return jsonify({"message": str(e), "type": "error"}), 500
@@ -510,21 +522,23 @@ def api_create_faq():
             # Handle JSON request (from query conversion)
             data = request.get_json()
             if not data or "question" not in data or "answer" not in data:
-                return jsonify({"type": "error", "message": "Question and answer are required"}), 400
+                return (
+                    jsonify(
+                        {"type": "error", "message": "Question and answer are required"}
+                    ),
+                    400,
+                )
 
             # Create new FAQ
-            faq = FAQ(
-                question=data["question"],
-                answer=data["answer"]
-            )
+            faq = FAQ(question=data["question"], answer=data["answer"])
             db.session.add(faq)
-            
+
             # If query_id is provided, delete the query
             if "query_id" in data:
                 query = Query.query.get(data["query_id"])
                 if query:
                     db.session.delete(query)
-            
+
             db.session.commit()
             return jsonify({"type": "success", "message": "FAQ created successfully"})
         else:
@@ -533,7 +547,12 @@ def api_create_faq():
             answer = request.form.get("answer")
 
             if not all([question, answer]):
-                return jsonify({"message": "Question and answer are required", "type": "error"}), 400
+                return (
+                    jsonify(
+                        {"message": "Question and answer are required", "type": "error"}
+                    ),
+                    400,
+                )
 
             # Create FAQ record
             faq = FAQ(question=question, answer=answer)
@@ -1167,17 +1186,19 @@ def debug_content():
 def api_get_query(id):
     try:
         query = Query.query.get_or_404(id)
-        
-        return jsonify({
-            "type": "success",
-            "query": {
-                "id": query.id,
-                "question": query.question,
-                "answer": query.answer or "",  # Use stored answer
-                "answer_found": query.answer_found,
-                "happy": query.happy,
-                "created_at": query.created_at.strftime('%Y-%m-%d %H:%M')
+
+        return jsonify(
+            {
+                "type": "success",
+                "query": {
+                    "id": query.id,
+                    "question": query.question,
+                    "answer": query.answer or "",  # Use stored answer
+                    "answer_found": query.answer_found,
+                    "happy": query.happy,
+                    "created_at": query.created_at.strftime("%Y-%m-%d %H:%M"),
+                },
             }
-        })
+        )
     except Exception as e:
         return jsonify({"type": "error", "message": str(e)}), 500
