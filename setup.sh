@@ -16,7 +16,7 @@ echo "🐍 Setting up Python backend..."
 # Create virtual environment in the project root
 python3 -m venv venv
 source venv/bin/activate // Activate the virtual environment in Linux
-.\venv\Scripts\activate # Activate the virtual environment in Windows
+# .\venv\Scripts\activate # Activate the virtual environment in Windows
 
 echo "📦 Installing Python dependencies..."
 pip install -r requirements.txt
