@@ -180,7 +180,7 @@ def chat():
         answer = response.choices[0].message.content
         if used_files:
             files_list = "\n".join(f"- {fname}" for fname in used_files)
-            answer = f"{answer}\n\n_Sources used:_\n{files_list}"
+            answer = f"{answer}\n\n <b>Sources used:</b>\n{files_list}"
 
         # 6. Save query with the generated answer
         query = save_query(answer=answer)
