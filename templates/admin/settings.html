@@ -7,16 +7,19 @@
         content: " *";
         color: red;
     }
+
     .ck-editor__editable {
         min-height: 200px;
     }
+
     .image-preview {
         max-width: 200px;
         max-height: 200px;
         margin-top: 10px;
         border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
+
     .preview-container {
         margin-top: 10px;
         padding: 10px;
@@ -24,6 +27,7 @@
         border-radius: 8px;
         background: #f8f9fa;
     }
+
     .preview-label {
         font-size: 0.9rem;
         color: #666;
@@ -35,17 +39,17 @@
 {% block content %}
 <div class="container-fluid">
     <h1 class="h3 mb-4 text-gray-800">System Settings</h1>
-    
+
     {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <script>
-                    toastr.{{ category }}('{{ message }}');
-                </script>
-            {% endfor %}
-        {% endif %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <script>
+        toastr.{ { category } } ('{{ message }}');
+    </script>
+    {% endfor %}
+    {% endif %}
     {% endwith %}
-    
+
     <div class="card shadow mb-4">
         <div class="card-header py-3">
             <h6 class="m-0 font-weight-bold text-primary">General Settings</h6>
@@ -54,18 +58,20 @@
             <form method="POST" action="{{ url_for('main.admin_settings') }}" enctype="multipart/form-data">
                 <div class="mb-3">
                     <label for="logo" class="form-label required-field">Application Name</label>
-                    <input type="text" class="form-control" id="logo" name="logo" value="{{ settings.get('logo', '') }}" required>
+                    <input type="text" class="form-control" id="logo" name="logo" value="{{ settings.get('logo', '') }}"
+                        required>
                 </div>
-                
+
                 <div class="mb-3">
                     <label for="logo_file" class="form-label">Logo Image</label>
                     <input type="file" class="form-control" id="logo_file" name="logo_file" accept="image/*">
                     <div class="preview-container">
                         <div class="preview-label">Current Logo:</div>
                         {% if settings.get('logo_file') %}
-                            <img src="{{ url_for('static', filename='uploads/' + settings.get('logo_file')) }}" class="image-preview" id="logoPreview">
+                        <img src="{{ url_for('static', filename='uploads/' + settings.get('logo_file')) }}"
+                            class="image-preview" id="logoPreview">
                         {% else %}
-                            <div class="text-muted">No logo uploaded</div>
+                        <div class="text-muted">No logo uploaded</div>
                         {% endif %}
                     </div>
                 </div>
@@ -76,20 +82,43 @@
                     <div class="preview-container">
                         <div class="preview-label">Current Favicon:</div>
                         {% if settings.get('favicon_file') %}
-                            <img src="{{ url_for('static', filename='uploads/' + settings.get('favicon_file')) }}" class="image-preview" id="faviconPreview">
+                        <img src="{{ url_for('static', filename='uploads/' + settings.get('favicon_file')) }}"
+                            class="image-preview" id="faviconPreview">
                         {% else %}
-                            <div class="text-muted">No favicon uploaded</div>
+                        <div class="text-muted">No favicon uploaded</div>
                         {% endif %}
                     </div>
+                </div>
+                <!-- show matched text yes/no toggle -->
+                <div class="mb-3">
+                    <label for="show_matched_text" class="form-label">Show Matched Text</label>
+                    <select class="form-select" id="show_matched_text" name="show_matched_text" >
+                        <option value="yes" {% if settings.get('show_matched_text') == 'yes' %}selected{% endif %}>Yes</option>
+                        <option value="no" {% if settings.get('show_matched_text') == 'no' %}selected{% endif %}>No</option>
+                    </select>
                 </div>
 
                 <div class="mb-3">
                     <label for="openai_key" class="form-label required-field">OpenAI API Key</label>
-                    <input type="password" class="form-control" id="openai_key" name="openai_key" value="{{ settings.get('openai_key', '') }}" required>
+                    <input type="password" class="form-control" id="openai_key" name="openai_key"
+                        value="{{ settings.get('openai_key', '') }}" required>
                 </div>
+                <!-- select openai models -->
+                <div class="mb-3">
+                    <label for="openai_model" class="form-label required-field">OpenAI Model</label>
+                    <select class="form-select" id="openai_model" name="openai_model" required>
+                        {% for model in models %}
+                        <option value="{{ model }}" {% if settings.get('openai_model')==model %}selected{% endif %}>
+                            {{ model }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
                 <div class="mb-3">
                     <label for="copyright" class="form-label">Copyright Text</label>
-                    <input type="text" class="form-control" id="copyright" name="copyright" value="{{ settings.get('copyright', '') }}">
+                    <input type="text" class="form-control" id="copyright" name="copyright"
+                        value="{{ settings.get('copyright', '') }}">
                 </div>
                 <div class="mb-3">
                     <label for="about" class="form-label">About Page Content</label>
@@ -97,7 +126,8 @@
                 </div>
                 <div class="mb-3">
                     <label for="contact" class="form-label">Contact Page Content</label>
-                    <textarea class="form-control" id="contact" name="contact">{{ settings.get('contact', '') }}</textarea>
+                    <textarea class="form-control" id="contact"
+                        name="contact">{{ settings.get('contact', '') }}</textarea>
                 </div>
                 <button type="submit" class="btn btn-primary">Save Settings</button>
             </form>
@@ -110,72 +140,72 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
 <script src="https://cdn.ckeditor.com/ckeditor5/40.1.0/classic/ckeditor.js"></script>
 <script>
-// Initialize CKEditor for both textareas
-ClassicEditor
-    .create(document.querySelector('#about'), {
-        toolbar: ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', '|', 'undo', 'redo'],
-        placeholder: 'Enter about page content here...'
-    })
-    .catch(error => {
-        console.error(error);
-    });
+    // Initialize CKEditor for both textareas
+    ClassicEditor
+        .create(document.querySelector('#about'), {
+            toolbar: ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', '|', 'undo', 'redo'],
+            placeholder: 'Enter about page content here...'
+        })
+        .catch(error => {
+            console.error(error);
+        });
 
-ClassicEditor
-    .create(document.querySelector('#contact'), {
-        toolbar: ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', '|', 'undo', 'redo'],
-        placeholder: 'Enter contact page content here...'
-    })
-    .catch(error => {
-        console.error(error);
-    });
+    ClassicEditor
+        .create(document.querySelector('#contact'), {
+            toolbar: ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', '|', 'undo', 'redo'],
+            placeholder: 'Enter contact page content here...'
+        })
+        .catch(error => {
+            console.error(error);
+        });
 
-// Image preview functionality
-function previewImage(input, previewId) {
-    if (input.files && input.files[0]) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const preview = document.getElementById(previewId);
-            if (preview) {
-                preview.src = e.target.result;
-                preview.style.display = 'block';
+    // Image preview functionality
+    function previewImage(input, previewId) {
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const preview = document.getElementById(previewId);
+                if (preview) {
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                }
             }
+            reader.readAsDataURL(input.files[0]);
         }
-        reader.readAsDataURL(input.files[0]);
     }
-}
 
-document.getElementById('logo_file').addEventListener('change', function() {
-    previewImage(this, 'logoPreview');
-});
-
-document.getElementById('favicon_file').addEventListener('change', function() {
-    previewImage(this, 'faviconPreview');
-});
-
-// Handle form submission
-document.querySelector('form').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const formData = new FormData(this);
-    
-    // Get content from CKEditor instances
-    formData.set('about', document.querySelector('#about').value);
-    formData.set('contact', document.querySelector('#contact').value);
-    
-    fetch(this.action, {
-        method: 'POST',
-        body: formData
-    }).then(response => response.json())
-    .then(data => {
-        if (data.type === 'success') {
-            toastr.success(data.message);
-            setTimeout(() => window.location.reload(), 1000);
-        } else {
-            toastr.error(data.message);
-        }
-    })
-    .catch(error => {
-        toastr.error('An error occurred while saving settings');
+    document.getElementById('logo_file').addEventListener('change', function () {
+        previewImage(this, 'logoPreview');
     });
-});
+
+    document.getElementById('favicon_file').addEventListener('change', function () {
+        previewImage(this, 'faviconPreview');
+    });
+
+    // Handle form submission
+    document.querySelector('form').addEventListener('submit', function (e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+
+        // Get content from CKEditor instances
+        formData.set('about', document.querySelector('#about').value);
+        formData.set('contact', document.querySelector('#contact').value);
+
+        fetch(this.action, {
+            method: 'POST',
+            body: formData
+        }).then(response => response.json())
+            .then(data => {
+                if (data.type === 'success') {
+                    toastr.success(data.message);
+                    setTimeout(() => window.location.reload(), 1000);
+                } else {
+                    toastr.error(data.message);
+                }
+            })
+            .catch(error => {
+                toastr.error('An error occurred while saving settings');
+            });
+    });
 </script>
-{% endblock %} 
+{% endblock %}

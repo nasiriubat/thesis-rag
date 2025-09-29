@@ -48,5 +48,6 @@ def create_app(config_name='default'):
     return app
 
 if __name__ == '__main__':
+    port=int(os.getenv('PORT', 4001))
     app = create_app('development')
-    app.run(host='0.0.0.0', port=2000) 
+    app.run(host='0.0.0.0', port=port) 
