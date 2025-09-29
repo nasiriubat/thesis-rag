@@ -1264,7 +1264,7 @@ def api_get_query(id):
     except Exception as e:
         return jsonify({"type": "error", "message": str(e)}), 500
 
-def extract_webpage_text(url, headless=True, wait_time=5):
+def extract_webpage_text(url, headless=True, wait_time=3):
     """
     Extract clean text from webpage using Selenium WebDriver.
     
