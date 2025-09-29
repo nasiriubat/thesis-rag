@@ -101,7 +101,19 @@ def chat():
         # 2. Ensure OpenAI key is set
         openai_key = Settings.query.filter_by(key="openai_key").first()
         openai_model = Settings.query.filter_by(key="openai_model").first()
-        if not openai_key or not openai_key.value or not openai_model or not openai_model.value:
+        show_matched_text = Settings.query.filter_by(key="show_matched_text").first()
+        show_matched_text = (
+            show_matched_text.value.lower()
+            if show_matched_text and show_matched_text.value
+            else "yes"
+        )
+
+        if (
+            not openai_key
+            or not openai_key.value
+            or not openai_model
+            or not openai_model.value
+        ):
             return (
                 jsonify(
                     {
@@ -147,13 +159,14 @@ def chat():
                 if r["file_id"] in file_id_to_title
             ]
         )
-        used_files = list(
+        used_files = [
             {
-                file_id_to_title[r["file_id"]]
-                for r in results
-                if r["file_id"] in file_id_to_title
+                "name": file_id_to_title[r["file_id"]],
+                "chunk": r.get("chunk", ""),  # adjust to your actual field name
             }
-        )
+            for r in results
+            if r["file_id"] in file_id_to_title
+        ]
 
         # 5. Generate answer via OpenAI
         system_prompt = {
@@ -163,7 +176,9 @@ def chat():
         prompt_content = f"""Conversation so far:{history_text} User's latest question:{question}Retrieved context:{context}"""
         client = OpenAI(api_key=openai_key.value)
         response = client.chat.completions.create(
-            model=openai_model.value if openai_model and openai_model.value else "gpt-4",
+            model=(
+                openai_model.value if openai_model and openai_model.value else "gpt-4"
+            ),
             messages=[
                 {
                     "role": "system",
@@ -182,19 +197,31 @@ def chat():
         answer = response.choices[0].message.content
         if used_files:
             files_list = []
-            for fname in used_files:
-                if fname.startswith("http"):
+            for f in used_files:
+                fname = f["name"]  # file name / URL string
+                chunk_text = f["chunk"].replace('"', "&quot;")  # escape quotes for HTML
+
+                if isinstance(fname, str) and fname.startswith("http"):
                     parsed = urlparse(fname)
-                    # Show domain + first part of path if it exists
                     display = parsed.netloc
                     if parsed.path and parsed.path != "/":
                         parts = parsed.path.strip("/").split("/")
-                        display += f"/{parts[0]}"  # show only first path segment
-                    files_list.append(
-                        f"- <a href='{fname}' target='_blank'>{display}</a>"
-                    )
+                        display += f"/{parts[0]}"
+                    html = f"- <a href='{fname}' target='_blank'>{display}</a>"
+                    if show_matched_text == "yes":
+                        html += (
+                            f"<details><summary style='cursor:pointer; color:gray;'>View chunk</summary>"
+                            f"<pre style='white-space: pre-wrap; margin:0;'>{chunk_text}</pre></details>"
+                        )
+                    files_list.append(html)
                 else:
-                    files_list.append(f"- {fname}")
+                    html = f"- {fname}"
+                    if show_matched_text == "yes":
+                        html += (
+                            f"<details><summary style='cursor:pointer; color:gray;'>View Original Text</summary>"
+                            f"<pre style='white-space: pre-wrap; margin:0;'>{chunk_text}</pre></details>"
+                        )
+                    files_list.append(html)
 
             files_html = "<br>".join(files_list)
             answer = f"{answer}<br><br><b>Sources used:</b><br>{files_html}"
@@ -343,6 +370,7 @@ def admin_settings():
                 "about": request.form.get("about"),
                 "contact": request.form.get("contact"),
                 "openai_model": request.form.get("openai_model"),
+                "show_matched_text": request.form.get("show_matched_text", "yes"),
             }
 
             # Handle logo file upload

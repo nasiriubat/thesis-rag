@@ -89,6 +89,14 @@
                         {% endif %}
                     </div>
                 </div>
+                <!-- show matched text yes/no toggle -->
+                <div class="mb-3">
+                    <label for="show_matched_text" class="form-label">Show Matched Text</label>
+                    <select class="form-select" id="show_matched_text" name="show_matched_text" >
+                        <option value="yes" {% if settings.get('show_matched_text') == 'yes' %}selected{% endif %}>Yes</option>
+                        <option value="no" {% if settings.get('show_matched_text') == 'no' %}selected{% endif %}>No</option>
+                    </select>
+                </div>
 
                 <div class="mb-3">
                     <label for="openai_key" class="form-label required-field">OpenAI API Key</label>
