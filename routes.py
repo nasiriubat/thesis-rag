@@ -211,7 +211,7 @@ def chat():
                     if show_matched_text == "yes":
                         html += (
                             f"<details><summary style='cursor:pointer; color:gray;'>View chunk</summary>"
-                            f"<pre style='white-space: pre-wrap; margin:0;'>{chunk_text}</pre></details>"
+                            f"<pre style='white-space: pre-wrap; margin:0; color:#247952 !important' >{chunk_text}</pre></details>"
                         )
                     files_list.append(html)
                 else:
@@ -219,7 +219,7 @@ def chat():
                     if show_matched_text == "yes":
                         html += (
                             f"<details><summary style='cursor:pointer; color:gray;'>View Original Text</summary>"
-                            f"<pre style='white-space: pre-wrap; margin:0;'>{chunk_text}</pre></details>"
+                            f"<pre style='white-space: pre-wrap; margin:0;color:#247952 !important'>{chunk_text}</pre></details>"
                         )
                     files_list.append(html)
 
