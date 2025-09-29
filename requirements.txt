@@ -16,3 +16,5 @@ tqdm
 youtube-transcript-api 
 gunicorn 
 flask-migrate
+selenium
+
