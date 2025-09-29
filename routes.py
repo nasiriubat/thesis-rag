@@ -35,6 +35,17 @@ from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api.formatters import TextFormatter
 from pathlib import Path
 from werkzeug.utils import secure_filename
+import time
+try:
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.common.exceptions import TimeoutException, WebDriverException
+    SELENIUM_AVAILABLE = True
+except ImportError:
+    SELENIUM_AVAILABLE = False
 
 # Create blueprint
 main = Blueprint("main", __name__)
@@ -66,7 +77,13 @@ def chat():
     question = data.get("question")
     language = data.get("language", "en")  # default to English
     history = data.get("history", [])
-    history_text = "\n".join(f"{h['role']}: {h['content']}" for h in history)
+    # check if history is a list of dicts with 'role' and 'content' and not empty
+    if isinstance(history, list) and history and all(
+        isinstance(h, dict) and "role" in h and "content" in h for h in history
+    ):
+        history_text = "\n".join(f"{h['role']}: {h['content']}" for h in history)
+    else:
+        history_text = ""
 
     if not question:
         return jsonify({"error": "No question provided", "type": "error"}), 400
@@ -134,7 +151,7 @@ def chat():
         if not file_ids:
             return handle_no_content(question, language)
 
-        results = search_across_indices(question, file_ids, top_k=5)
+        results = search_across_indices(question, file_ids, top_k=3)
         if not results and not history_text:
             # Save query with answer_found=False and return no content message
             message = {
@@ -191,7 +208,7 @@ def chat():
                 },
             ],
             temperature=0.8,
-            max_tokens=800,
+            max_tokens=600,
         )
 
         answer = response.choices[0].message.content
@@ -210,7 +227,7 @@ def chat():
                     html = f"- <a href='{fname}' target='_blank'>{display}</a>"
                     if show_matched_text == "yes":
                         html += (
-                            f"<details><summary style='cursor:pointer; color:gray;'>View chunk</summary>"
+                            f"<details><summary style='cursor:pointer; color:gray;'>View Original Text</summary>"
                             f"<pre style='white-space: pre-wrap; margin:0; color:#247952 !important' >{chunk_text}</pre></details>"
                         )
                     files_list.append(html)
@@ -736,37 +753,6 @@ def extract_youtube_text(url):
         return None
 
 
-def extract_webpage_text(url):
-    """Extract text from webpage."""
-    try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-
-        soup = BeautifulSoup(response.text, "html.parser")
-
-        # Remove script and style elements
-        for script in soup(["script", "style"]):
-            script.decompose()
-
-        # Get text
-        text = soup.get_text()
-
-        # Break into lines and remove leading and trailing space on each
-        lines = (line.strip() for line in text.splitlines())
-        # Break multi-headlines into a line each
-        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-        # Drop blank lines
-        text = "\n".join(chunk for chunk in chunks if chunk)
-
-        return text
-    except Exception as e:
-        print(f"Error extracting webpage text: {str(e)}")
-        return None
-
-
 def generate_filename(source, content=None):
     """Generate a unique filename based on the source type and content."""
     try:
@@ -1277,3 +1263,223 @@ def api_get_query(id):
         )
     except Exception as e:
         return jsonify({"type": "error", "message": str(e)}), 500
+
+def extract_webpage_text(url, headless=True, wait_time=5):
+    """
+    Extract clean text from webpage using Selenium WebDriver.
+    
+    Args:
+        url (str): The URL to extract text from
+        headless (bool): Run browser in headless mode (default: True)
+        wait_time (int): Time to wait for dynamic content to load (default: 3 seconds)
+    
+    Returns:
+        str: Extracted clean text content, or None if extraction fails
+    """
+    try:
+        # Validate URL
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
+        
+        # Check if Selenium is available
+        if not SELENIUM_AVAILABLE:
+            print("Selenium not available. Install with: pip install selenium")
+            return None
+        
+        # Extract content using Selenium
+        result = extract_with_selenium(url, headless, wait_time)
+        
+        if result:
+            return result
+        else:
+            print(f"No content could be extracted from: {url}")
+            return None
+            
+    except Exception as e:
+        print(f"Error extracting webpage text: {str(e)}")
+        return None
+
+def extract_with_selenium(url, headless=True, wait_time=3):
+    """
+    Extract content using Selenium WebDriver with enhanced features.
+    
+    Args:
+        url (str): The URL to extract content from
+        headless (bool): Run browser in headless mode
+        wait_time (int): Time to wait for dynamic content
+    
+    Returns:
+        str: Clean extracted text content
+    """
+    if not SELENIUM_AVAILABLE:
+        return None
+        
+    driver = None
+    try:
+        # Setup Chrome driver with optimized options
+        chrome_options = Options()
+        
+        # Headless mode
+        if headless:
+            chrome_options.add_argument("--headless")
+        
+        # Performance optimizations
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-images")  # Faster loading
+        chrome_options.add_argument("--disable-javascript")  # Disable JS for faster loading (optional)
+        chrome_options.add_argument("--disable-plugins")
+        chrome_options.add_argument("--disable-web-security")
+        chrome_options.add_argument("--disable-features=VizDisplayCompositor")
+        
+        # User agent
+        chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+        
+        # Window size
+        chrome_options.add_argument("--window-size=1920,1080")
+        
+        # Initialize driver (assumes ChromeDriver is in PATH)
+        driver = webdriver.Chrome(options=chrome_options)
+        driver.set_page_load_timeout(30)
+        
+        # Navigate to page
+        print(f"🌐 Loading page: {url}")
+        driver.get(url)
+        
+        # Wait for page to load
+        print("⏳ Waiting for page to load...")
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
+        
+        # Wait for dynamic content to load
+        print(f"⏳ Waiting {wait_time} seconds for dynamic content...")
+        time.sleep(wait_time)
+        
+        # Get page source after JavaScript execution
+        print("📄 Extracting page content...")
+        html = driver.page_source
+        
+        # Clean and extract text
+        print("🧹 Cleaning and processing text...")
+        return clean_and_extract_text(html)
+        
+    except TimeoutException:
+        print("⏰ Page load timeout - trying to extract available content")
+        if driver:
+            try:
+                html = driver.page_source
+                return clean_and_extract_text(html)
+            except:
+                return None
+    except Exception as e:
+        print(f"❌ Selenium extraction failed: {e}")
+        return None
+    finally:
+        if driver:
+            driver.quit()
+
+
+def clean_and_extract_text(html):
+    """Clean HTML and extract meaningful text content as plain text"""
+    soup = BeautifulSoup(html, "html.parser")
+    
+    # Remove unwanted elements
+    unwanted_tags = [
+        'script', 'style', 'nav', 'header', 'footer', 'aside',
+        'advertisement', 'ads', 'ad', 'popup', 'modal',
+        'cookie-notice', 'cookie-banner', 'newsletter',
+        'social-media', 'share-buttons', 'comment-section',
+        'related-articles', 'sidebar', 'menu', 'navigation'
+    ]
+    
+    for tag in unwanted_tags:
+        for element in soup.find_all(tag):
+            element.decompose()
+    
+    # Remove elements with specific classes/IDs that are likely unwanted
+    unwanted_selectors = [
+        '[class*="ad-"]', '[class*="advertisement"]', '[class*="popup"]',
+        '[class*="modal"]', '[class*="cookie"]', '[class*="newsletter"]',
+        '[class*="social"]', '[class*="share"]', '[class*="comment"]',
+        '[class*="sidebar"]', '[class*="menu"]', '[class*="nav"]',
+        '[id*="ad-"]', '[id*="advertisement"]', '[id*="popup"]',
+        '[id*="modal"]', '[id*="cookie"]', '[id*="newsletter"]',
+        '[id*="social"]', '[id*="share"]', '[id*="comment"]',
+        '[id*="sidebar"]', '[id*="menu"]', '[id*="nav"]'
+    ]
+    
+    for selector in unwanted_selectors:
+        for element in soup.select(selector):
+            element.decompose()
+    
+    # Find main content area
+    main_content = find_main_content(soup)
+    
+    if main_content:
+        text = main_content.get_text(separator=' ', strip=True)
+    else:
+        text = soup.get_text(separator=' ', strip=True)
+    
+    # Clean up text
+    return post_process_text(text)
+
+def find_main_content(soup):
+    """Find the main content area of the page"""
+    # Common selectors for main content
+    main_selectors = [
+        'main', 'article', '[role="main"]',
+        '.content', '.main-content', '.article-content',
+        '.post-content', '.entry-content', '.story-content',
+        '#content', '#main', '#article', '#post'
+    ]
+    
+    for selector in main_selectors:
+        element = soup.select_one(selector)
+        if element and len(element.get_text(strip=True)) > 100:
+            return element
+    
+    # Fallback: find the element with most text content
+    all_elements = soup.find_all(['div', 'section', 'article'])
+    max_length = 0
+    main_element = None
+    
+    for element in all_elements:
+        text_length = len(element.get_text(strip=True))
+        if text_length > max_length and text_length > 100:
+            max_length = text_length
+            main_element = element
+    
+    return main_element
+
+def post_process_text(text):
+    """Clean and format extracted text as plain text"""
+    # Remove excessive whitespace
+    text = re.sub(r'\s+', ' ', text)
+    
+    # Remove common unwanted patterns
+    unwanted_patterns = [
+        r'Cookie\s+Policy.*?(?=\n|$)',
+        r'Privacy\s+Policy.*?(?=\n|$)',
+        r'Terms\s+of\s+Service.*?(?=\n|$)',
+        r'Subscribe\s+to\s+our\s+newsletter.*?(?=\n|$)',
+        r'Follow\s+us\s+on.*?(?=\n|$)',
+        r'Share\s+this\s+article.*?(?=\n|$)',
+        r'Advertisement.*?(?=\n|$)',
+        r'Sponsored\s+Content.*?(?=\n|$)',
+    ]
+    
+    for pattern in unwanted_patterns:
+        text = re.sub(pattern, '', text, flags=re.IGNORECASE)
+    
+    # Remove lines that are too short (likely navigation or metadata)
+    lines = text.split('\n')
+    cleaned_lines = []
+    for line in lines:
+        line = line.strip()
+        if len(line) > 20:  # Keep lines with substantial content
+            cleaned_lines.append(line)
+    
+    return '\n'.join(cleaned_lines)

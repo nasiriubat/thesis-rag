@@ -24,8 +24,8 @@ model = SentenceTransformer('all-MiniLM-L6-v2')
 
 # Initialize tiktoken
 encoding = tiktoken.encoding_for_model("text-embedding-ada-002")
-MAX_TOKENS = 700  # Smaller chunks for more precise matching
-OVERLAP = 150
+MAX_TOKENS = 500  # Smaller chunks for more precise matching
+OVERLAP = 100
 MIN_SCORE_THRESHOLD = 0.3  # Base threshold for all content types
 
 def get_openai_key():
