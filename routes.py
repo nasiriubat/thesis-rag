@@ -72,6 +72,7 @@ def chat():
         return jsonify({"error": "No question provided", "type": "error"}), 400
 
     try:
+
         def save_query(answer_found=True, answer=None):
             query = Query(
                 question=question,
@@ -99,7 +100,8 @@ def chat():
 
         # 2. Ensure OpenAI key is set
         openai_key = Settings.query.filter_by(key="openai_key").first()
-        if not openai_key or not openai_key.value:
+        openai_model = Settings.query.filter_by(key="openai_model").first()
+        if not openai_key or not openai_key.value or not openai_model or not openai_model.value:
             return (
                 jsonify(
                     {
@@ -127,14 +129,14 @@ def chat():
                 "fi": "Valitettavasti en löytänyt vastausta kysymykseesi. Olen tallentanut sen ja tiimimme tarkistaa sen.",
                 "en": "I'm sorry, I couldn't find a specific answer to your question. I've noted it down and our team will review it.",
             }.get(language, "en")
-            
+
             query = save_query(answer_found=False, answer=message)
-            
+
             # Create new question for review
             new_question = NewQuestion(question=question)
             db.session.add(new_question)
             db.session.commit()
-            
+
             return jsonify({"answer": message, "type": "info", "query_id": query.id})
 
         # 4. Build context from results
@@ -161,7 +163,7 @@ def chat():
         prompt_content = f"""Conversation so far:{history_text} User's latest question:{question}Retrieved context:{context}"""
         client = OpenAI(api_key=openai_key.value)
         response = client.chat.completions.create(
-            model="gpt-4",
+            model=openai_model.value if openai_model and openai_model.value else "gpt-4",
             messages=[
                 {
                     "role": "system",
@@ -179,9 +181,23 @@ def chat():
 
         answer = response.choices[0].message.content
         if used_files:
-            files_list = "<br>".join(f"- {fname}" for fname in used_files)
-            answer = f"{answer}<br><br><b>Sources used:</b><br>{files_list}"
+            files_list = []
+            for fname in used_files:
+                if fname.startswith("http"):
+                    parsed = urlparse(fname)
+                    # Show domain + first part of path if it exists
+                    display = parsed.netloc
+                    if parsed.path and parsed.path != "/":
+                        parts = parsed.path.strip("/").split("/")
+                        display += f"/{parts[0]}"  # show only first path segment
+                    files_list.append(
+                        f"- <a href='{fname}' target='_blank'>{display}</a>"
+                    )
+                else:
+                    files_list.append(f"- {fname}")
 
+            files_html = "<br>".join(files_list)
+            answer = f"{answer}<br><br><b>Sources used:</b><br>{files_html}"
 
         # 6. Save query with the generated answer
         query = save_query(answer=answer)
@@ -326,6 +342,7 @@ def admin_settings():
                 "copyright": request.form.get("copyright"),
                 "about": request.form.get("about"),
                 "contact": request.form.get("contact"),
+                "openai_model": request.form.get("openai_model"),
             }
 
             # Handle logo file upload
@@ -379,7 +396,35 @@ def admin_settings():
             )
 
     settings = {s.key: s.value for s in Settings.query.all()}
-    return render_template("admin/settings.html", settings=settings)
+    models = []
+
+    if "openai_key" in settings and settings["openai_key"]:
+        try:
+            client = OpenAI(api_key=settings["openai_key"])
+            resp = client.models.list()
+
+            models = [
+                m.id
+                for m in resp.data
+                if (
+                    (m.id.startswith("gpt-") or m.id.startswith("o1-"))
+                    and "embedding" not in m.id
+                    and "audio" not in m.id
+                    and ":" not in m.id
+                )
+            ]
+
+            models = sorted(set(models), reverse=True)
+
+            if not models:
+                models = ["gpt-4"]
+        except Exception as e:
+            print("⚠️ Error fetching models:", e)
+            models = ["gpt-4"]
+    else:
+        models = ["gpt-4"]
+
+    return render_template("admin/settings.html", settings=settings, models=models)
 
 
 @main.route("/admin/new-questions")
@@ -702,18 +747,19 @@ def generate_filename(source, content=None):
 
         if isinstance(source, str):  # URL or raw text
             if source.startswith(("http://", "https://")):
-                # For URLs, use the URL itself as the base name
-                parsed_url = urlparse(source)
-                # Remove protocol and www
-                domain = parsed_url.netloc.replace("www.", "")
-                # Get path and remove leading/trailing slashes
-                path = parsed_url.path.strip("/")
-                # Combine domain and path, replace slashes with underscores
-                url_name = f"{domain}_{path}".replace("/", "_")
-                # Make it safe for filenames
-                safe_name = re.sub(r"[^\w\s-]", "", url_name)
-                safe_name = re.sub(r"[-\s]+", "_", safe_name)
-                return f"url_{safe_name}_{current_time}"
+                # # For URLs, use the URL itself as the base name
+                # parsed_url = urlparse(source)
+                # # Remove protocol and www
+                # domain = parsed_url.netloc.replace("www.", "")
+                # # Get path and remove leading/trailing slashes
+                # path = parsed_url.path.strip("/")
+                # # Combine domain and path, replace slashes with underscores
+                # url_name = f"{domain}_{path}".replace("/", "_")
+                # # Make it safe for filenames
+                # safe_name = re.sub(r"[^\w\s-]", "", url_name)
+                # safe_name = re.sub(r"[-\s]+", "_", safe_name)
+                # return f"url_{safe_name}_{current_time}"
+                return source
             else:
                 # For raw text, use first line or generate random name
                 if content:
