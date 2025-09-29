@@ -1,3 +1,4 @@
+old working one for thesis rag
 # AI-Powered Chatbot with FAQ Management
 
 A Flask-based chatbot application that uses OpenAI's GPT model to answer questions based on uploaded documents and FAQs. The system includes an admin interface for managing FAQs, documents, and user queries.
