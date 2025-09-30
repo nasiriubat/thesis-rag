@@ -1,5 +1,31 @@
 {% extends "admin/base.html" %}
 
+{% block extra_css %}
+<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/select/1.7.0/css/select.bootstrap5.min.css">
+<style>
+    .dataTables_wrapper .dataTables_length,
+    .dataTables_wrapper .dataTables_filter,
+    .dataTables_wrapper .dataTables_info,
+    .dataTables_wrapper .dataTables_processing,
+    .dataTables_wrapper .dataTables_paginate {
+        color: #333;
+    }
+    .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+        background: #0d6efd !important;
+        border-color: #0d6efd !important;
+        color: white !important;
+    }
+    .bulk-actions {
+        display: none;
+        margin-bottom: 1rem;
+    }
+    .bulk-actions.show {
+        display: block;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <h1 class="h3 mb-4 text-gray-800">Query Management</h1>
@@ -14,41 +40,66 @@
         {% endif %}
     {% endwith %}
     
+    <!-- Bulk Actions Bar -->
+    <div class="bulk-actions" id="bulkActions">
+        <div class="alert alert-info d-flex justify-content-between align-items-center">
+            <span id="selectedCount">0 items selected</span>
+            <div>
+                <button type="button" class="btn btn-danger btn-sm me-2" onclick="bulkDeleteQueries()">
+                    <i class="fas fa-trash"></i> Delete Selected
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" onclick="clearSelection()">
+                    <i class="fas fa-times"></i> Clear Selection
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="card shadow mb-4">
         <div class="card-header py-3 d-flex justify-content-between align-items-center">
             <h6 class="m-0 font-weight-bold text-primary">User Queries</h6>
-            <button type="button" class="btn btn-danger btn-sm" onclick="deleteAllQueries()">
-                <i class="fas fa-trash"></i> Delete All
-            </button>
+            <div>
+                <button type="button" class="btn btn-danger btn-sm me-2" onclick="deleteAllQueries()">
+                    <i class="fas fa-trash-alt"></i> Delete All
+                </button>
+            </div>
         </div>
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-bordered table-mobile-cards">
+                <table id="queriesTable" class="table table-bordered table-striped">
                     <thead>
                         <tr>
-                            <th>ID</th>
-                            <th>Question</th>
-                            <th>Answer Found</th>
-                            <th>User Feedback</th>
-                            <th>Created At</th>
-                            <th>Actions</th>
+                            <th width="5%">
+                                <input type="checkbox" id="selectAll" class="form-check-input">
+                            </th>
+                            <th width="5%">ID</th>
+                            <th width="30%">Question</th>
+                            <th width="15%">Answer Found</th>
+                            <th width="15%">User Feedback</th>
+                            <th width="15%">Created At</th>
+                            <th width="15%">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for query in queries %}
-                        <tr>
-                            <td data-label="ID">{{ loop.index }}</td>
-                            <td data-label="Question">
-                                <span class="text-truncate d-block" style="max-width: 300px;">{{ query.question[:100] }}{% if query.question|length > 100 %}...{% endif %}</span>
+                        <tr data-query-id="{{ query.id }}">
+                            <td>
+                                <input type="checkbox" class="form-check-input query-checkbox" value="{{ query.id }}">
                             </td>
-                            <td data-label="Answer Found">
+                            <td>{{ loop.index }}</td>
+                            <td>
+                                <span class="text-truncate d-block" style="max-width: 300px;" title="{{ query.question }}">
+                                    {{ query.question[:100] }}{% if query.question|length > 100 %}...{% endif %}
+                                </span>
+                            </td>
+                            <td>
                                 {% if query.answer_found %}
                                 <span class="badge bg-success">Yes</span>
                                 {% else %}
                                 <span class="badge bg-danger">No</span>
                                 {% endif %}
                             </td>
-                            <td data-label="User Feedback">
+                            <td>
                                 {% if query.happy is none %}
                                 <span class="badge bg-secondary">No Feedback</span>
                                 {% elif query.happy %}
@@ -57,8 +108,8 @@
                                 <span class="badge bg-danger">Not Happy</span>
                                 {% endif %}
                             </td>
-                            <td data-label="Created At">{{ query.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                            <td data-label="Actions" class="col-actions">
+                            <td>{{ query.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td>
                                 {% if query.answer_found and query.happy %}
                                 <button class="btn btn-sm btn-success" onclick="addToFAQ({{ query.id }}, true)" title="Add to FAQ">
                                     <i class="fas fa-plus"></i> Add to FAQ
@@ -109,8 +160,132 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.datatables.net/select/1.7.0/js/dataTables.select.min.js"></script>
 <script>
 let currentQueryId = null;
+let queriesTable;
+
+// Initialize DataTable
+$(document).ready(function() {
+    queriesTable = $('#queriesTable').DataTable({
+        "pageLength": 10,
+        "lengthMenu": [[5, 10, 25, 50, -1], [5, 10, 25, 50, "All"]],
+        "order": [[1, "desc"]],
+        "columnDefs": [
+            { "orderable": false, "targets": [0, 6] }, // Disable sorting on checkbox and actions columns
+            { "searchable": false, "targets": [0, 6] } // Disable search on checkbox and actions columns
+        ],
+        "language": {
+            "search": "Search Queries:",
+            "lengthMenu": "Show _MENU_ queries per page",
+            "info": "Showing _START_ to _END_ of _TOTAL_ queries",
+            "infoEmpty": "No queries found",
+            "infoFiltered": "(filtered from _MAX_ total queries)",
+            "paginate": {
+                "first": "First",
+                "last": "Last",
+                "next": "Next",
+                "previous": "Previous"
+            }
+        }
+    });
+
+    // Handle select all checkbox
+    $('#selectAll').on('change', function() {
+        const isChecked = this.checked;
+        $('.query-checkbox').prop('checked', isChecked);
+        updateBulkActions();
+    });
+
+    // Handle individual checkboxes
+    $(document).on('change', '.query-checkbox', function() {
+        updateBulkActions();
+        updateSelectAllCheckbox();
+    });
+});
+
+function updateBulkActions() {
+    const selectedCount = $('.query-checkbox:checked').length;
+    const bulkActions = $('#bulkActions');
+    const selectedCountSpan = $('#selectedCount');
+    
+    if (selectedCount > 0) {
+        bulkActions.addClass('show');
+        selectedCountSpan.text(`${selectedCount} item${selectedCount > 1 ? 's' : ''} selected`);
+    } else {
+        bulkActions.removeClass('show');
+    }
+}
+
+function updateSelectAllCheckbox() {
+    const totalCheckboxes = $('.query-checkbox').length;
+    const checkedCheckboxes = $('.query-checkbox:checked').length;
+    
+    if (checkedCheckboxes === 0) {
+        $('#selectAll').prop('indeterminate', false).prop('checked', false);
+    } else if (checkedCheckboxes === totalCheckboxes) {
+        $('#selectAll').prop('indeterminate', false).prop('checked', true);
+    } else {
+        $('#selectAll').prop('indeterminate', true);
+    }
+}
+
+function clearSelection() {
+    $('.query-checkbox').prop('checked', false);
+    $('#selectAll').prop('checked', false).prop('indeterminate', false);
+    updateBulkActions();
+}
+
+function getSelectedQueryIds() {
+    return $('.query-checkbox:checked').map(function() {
+        return $(this).val();
+    }).get();
+}
+
+function bulkDeleteQueries() {
+    const selectedIds = getSelectedQueryIds();
+    
+    if (selectedIds.length === 0) {
+        toastr.warning('Please select queries to delete');
+        return;
+    }
+    
+    if (confirm(`Are you sure you want to delete ${selectedIds.length} quer${selectedIds.length > 1 ? 'ies' : 'y'}? This action cannot be undone.`)) {
+        // Show loading state
+        const deleteButton = event.target;
+        const originalText = deleteButton.innerHTML;
+        deleteButton.disabled = true;
+        deleteButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting...';
+        
+        // Delete each query
+        Promise.all(selectedIds.map(id => 
+            fetch(`/api/query/${id}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+            })
+        ))
+        .then(responses => Promise.all(responses.map(r => r.json())))
+        .then(results => {
+            const successCount = results.filter(r => r.message).length;
+            if (successCount > 0) {
+                toastr.success(`Successfully deleted ${successCount} quer${successCount > 1 ? 'ies' : 'y'}`);
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                toastr.error('Failed to delete queries');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            toastr.error('An error occurred while deleting queries');
+        })
+        .finally(() => {
+            deleteButton.disabled = false;
+            deleteButton.innerHTML = originalText;
+        });
+    }
+}
 
 function addToFAQ(queryId, useExisting) {
     currentQueryId = queryId;
@@ -181,26 +356,36 @@ document.getElementById('addToFAQForm').addEventListener('submit', function(e) {
 });
 
 function deleteAllQueries() {
-    if (confirm('Are you sure you want to delete all queries? This action cannot be undone.')) {
-        fetch('/api/queries/delete-all', {
-            method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.message) {
-                toastr.success(data.message);
-                setTimeout(() => window.location.reload(), 1000);
-            } else {
-                toastr.error(data.error || 'Failed to delete all queries');
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            toastr.error('An error occurred while deleting all queries');
-        });
+    if (confirm('Are you sure you want to delete ALL queries? This action cannot be undone and will remove all query data permanently.')) {
+        if (confirm('This is your final warning. Click OK to permanently delete ALL queries.')) {
+            // Show loading state
+            const deleteButton = event.target;
+            const originalText = deleteButton.innerHTML;
+            deleteButton.disabled = true;
+            deleteButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting All...';
+            
+            fetch('/api/queries/bulk-delete', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.type === 'success') {
+                    toastr.success(data.message);
+                    setTimeout(() => window.location.reload(), 1000);
+                } else {
+                    toastr.error(data.message || 'Failed to delete all queries');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                toastr.error('An error occurred while deleting all queries');
+            })
+            .finally(() => {
+                deleteButton.disabled = false;
+                deleteButton.innerHTML = originalText;
+            });
+        }
     }
 }
 </script>
