@@ -23,7 +23,7 @@
         </div>
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-bordered">
+                <table class="table table-bordered table-mobile-cards">
                     <thead>
                         <tr>
                             <th>ID</th>
@@ -36,17 +36,23 @@
                     <tbody>
                         {% for faq in faqs %}
                         <tr>
-                            <td>{{ loop.index }}</td>
-                            <td>{{ faq.question[:100] }}{% if faq.question|length > 100 %}...{% endif %}</td>
-                            <td>{{ faq.answer[:100] }}{% if faq.answer|length > 100 %}...{% endif %}</td>
-                            <td>{{ faq.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                            <td>
-                                <button class="btn btn-info btn-sm" onclick="editFaq({{ faq.id }}, '{{ faq.question|replace("'", "\\'") }}', '{{ faq.answer|replace("'", "\\'") }}')">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button class="btn btn-danger btn-sm" onclick="deleteFaq({{ faq.id }})">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+                            <td data-label="ID">{{ loop.index }}</td>
+                            <td data-label="Question">
+                                <span class="text-truncate d-block" style="max-width: 300px;">{{ faq.question[:100] }}{% if faq.question|length > 100 %}...{% endif %}</span>
+                            </td>
+                            <td data-label="Answer">
+                                <span class="text-truncate d-block" style="max-width: 300px;">{{ faq.answer[:100] }}{% if faq.answer|length > 100 %}...{% endif %}</span>
+                            </td>
+                            <td data-label="Created At">{{ faq.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td data-label="Actions" class="col-actions">
+                                <div class="btn-group" role="group">
+                                    <button class="btn btn-info btn-sm" onclick="editFaq({{ faq.id }}, '{{ faq.question|replace("'", "\\'") }}', '{{ faq.answer|replace("'", "\\'") }}')" title="Edit FAQ">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button class="btn btn-danger btn-sm" onclick="deleteFaq({{ faq.id }})" title="Delete FAQ">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -59,24 +65,24 @@
 
 <!-- Add FAQ Modal -->
 <div class="modal fade" id="addFaqModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Add New FAQ</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="addFaqForm" method="POST" action="{{ url_for('main.api_create_faq') }}">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="faqQuestion" class="form-label">Question</label>
-                        <textarea class="form-control" id="faqQuestion" name="question" rows="3" required></textarea>
+                        <textarea class="form-control" id="faqQuestion" name="question" rows="3" required placeholder="Enter the question..."></textarea>
                     </div>
                     <div class="mb-3">
                         <label for="faqAnswer" class="form-label">Answer</label>
-                        <textarea class="form-control" id="faqAnswer" name="answer" rows="5" required></textarea>
+                        <textarea class="form-control" id="faqAnswer" name="answer" rows="5" required placeholder="Enter the answer..."></textarea>
                     </div>
                 </div>
-                <div class="modal-footer">
+                <div class="modal-footer d-flex flex-column flex-sm-row gap-2">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                     <button type="submit" class="btn btn-primary">Add FAQ</button>
                 </div>
@@ -87,24 +93,24 @@
 
 <!-- Edit FAQ Modal -->
 <div class="modal fade" id="editFaqModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Edit FAQ</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="editFaqForm" method="POST">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label for="editQuestion" class="form-label">Question</label>
-                        <textarea class="form-control" id="editQuestion" name="question" rows="3" required></textarea>
+                        <textarea class="form-control" id="editQuestion" name="question" rows="3" required placeholder="Enter the question..."></textarea>
                     </div>
                     <div class="mb-3">
                         <label for="editAnswer" class="form-label">Answer</label>
-                        <textarea class="form-control" id="editAnswer" name="answer" rows="5" required></textarea>
+                        <textarea class="form-control" id="editAnswer" name="answer" rows="5" required placeholder="Enter the answer..."></textarea>
                     </div>
                 </div>
-                <div class="modal-footer">
+                <div class="modal-footer d-flex flex-column flex-sm-row gap-2">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                     <button type="submit" class="btn btn-primary">Save Changes</button>
                 </div>
