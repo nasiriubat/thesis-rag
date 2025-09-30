@@ -43,21 +43,26 @@
                 <table class="table table-bordered">
                     <thead>
                         <tr>
-                            <th colspan="1">ID</th>
-                            <th colspan="4">File Name</th>
-                            <th colspan="4">Content Preview</th>
-                            <th colspan="2">Uploaded By</th>
-                            <th colspan="2">Created At</th>
-                            <th colspan="2">Actions</th>
+                            <th width="2%">ID</th>
+                            <th width="25%">File Name</th>
+                            <th width="40%">Content Preview</th>
+                            <th width="15%">Uploaded By</th>
+                            <th width="10%">Created At</th>
+                            <th width="5%">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for file in files %}
                         <tr data-file-id="{{ file.id }}">
                             <td class="col-idx">{{ loop.index }}</td>
-                            <td class="col-filename">{{ file.original_filename }}</td>
+                            <td class="col-filename">{{ file.original_filename[:60] }}{% if file.original_filename|length > 60 %}.....{% endif %} 
+                                <!-- add a copy button -->
+                                <button class="btn  btn-sm" onclick="copyToClipboard('{{ file.original_filename }}')">
+                                    <i class="fas fa-copy text-primary"></i>
+                                </button>
+                            </td>
                             <td class="col-text">
-                                {{ file.text[:30] }}{% if file.text|length > 30 %}...{% endif %}
+                                {{ file.text[:60] }}{% if file.text|length > 60 %}...{% endif %}
                             </td>
                             <td class="col-user">{{ file.user.name }}</td>
                             <td class="col-date">{{ file.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
@@ -340,5 +345,13 @@
             });
         }
     });
+    // Copy to clipboard function
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text).then(function () {
+            toastr.success('Filename copied to clipboard');
+        }, function (err) {
+            toastr.error('Could not copy text: ', err);
+        });
+    }
 </script>
 {% endblock %}
