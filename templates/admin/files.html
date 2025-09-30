@@ -11,12 +11,7 @@
     padding: 8px;
   }
   /* Set column widths */
-  .col-idx { width: 5%; }
-  .col-filename { width: 35%; }
-  .col-text { width: 30%; }
-  .col-user { width: 10%; }
-  .col-date { width: 10%; }
-  .col-actions { width: 10%; }
+
 </style>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet">
 {% endblock %}
@@ -48,12 +43,12 @@
                 <table class="table table-bordered">
                     <thead>
                         <tr>
-                            <th>ID</th>
-                            <th>File Name</th>
-                            <th>Content Preview</th>
-                            <th>Uploaded By</th>
-                            <th>Created At</th>
-                            <th>Actions</th>
+                            <th colspan="1">ID</th>
+                            <th colspan="4">File Name</th>
+                            <th colspan="4">Content Preview</th>
+                            <th colspan="2">Uploaded By</th>
+                            <th colspan="2">Created At</th>
+                            <th colspan="2">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
