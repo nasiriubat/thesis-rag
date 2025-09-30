@@ -2,16 +2,21 @@
 
 {% block extra_css %}
 <style>
-  table td {
-    word-wrap: break-word;     /* allow breaking long words */
-    white-space: normal;       /* allow wrapping to new line */
-    vertical-align: top;       /* align wrapped text at the top */
-  }
-  table th, table td {
-    padding: 8px;
-  }
-  /* Set column widths */
+    table td {
+        word-wrap: break-word;
+        /* allow breaking long words */
+        white-space: normal;
+        /* allow wrapping to new line */
+        vertical-align: top;
+        /* align wrapped text at the top */
+    }
 
+    table th,
+    table td {
+        padding: 8px;
+    }
+
+    /* Set column widths */
 </style>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet">
 {% endblock %}
@@ -53,32 +58,33 @@
                     </thead>
                     <tbody>
                         {% for file in files %}
-                        <tr data-file-id="{{ file.id }}">
+                        <tr data-file-id="{{ file.id }}" data-filename="{{ file.original_filename }}" data-content="{{ file.text|replace('"', '&quot;')|replace('\n', '\\n') }}">
                             <td class="col-idx" data-label="ID">{{ loop.index }}</td>
                             <td class="col-filename" data-label="File Name">
                                 <div class="d-flex align-items-center justify-content-between">
-                                    <span class="text-truncate me-2" style="max-width: 200px;">{{ file.original_filename }}</span>
-                                    <button class="btn btn-sm btn-outline-primary" onclick="copyToClipboard('{{ file.original_filename }}')" title="Copy filename">
+                                    <span class="text-truncate me-2" style="max-width: 200px;">{{ file.original_filename
+                                        }}</span>
+                                    <button class="btn btn-sm btn-outline-primary"
+                                        onclick="copyToClipboard('{{ file.original_filename }}')" title="Copy filename">
                                         <i class="fas fa-copy"></i>
                                     </button>
                                 </div>
                             </td>
                             <td class="col-text" data-label="Content Preview">
-                                <span class="text-truncate d-block" style="max-width: 300px;">{{ file.text[:100] }}{% if file.text|length > 100 %}...{% endif %}</span>
+                                <span class="text-truncate d-block" style="max-width: 300px;">{{ file.text[:100] }}{% if
+                                    file.text|length > 100 %}...{% endif %}</span>
                             </td>
                             <td class="col-user" data-label="Uploaded By">{{ file.user.name }}</td>
-                            <td class="col-date" data-label="Created At">{{ file.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td class="col-date" data-label="Created At">{{ file.created_at.strftime('%Y-%m-%d %H:%M')
+                                }}</td>
                             <td class="col-actions" data-label="Actions">
                                 <div class="btn-group" role="group">
-                                    <button class="btn btn-info btn-sm"
-                                        onclick="viewFile('{{ file.id }}', '{{ file.text|replace("'", "\\'")|replace("
-                                        \n", "\\n" ) }}', '{{ file.summary|replace("'", " \\'")|replace("\n", "\\n" ) if
-                                        file.summary else "" }}', '{{ file.original_filename|replace("'", " \\'") if
-                                        file.original_filename else "" }}')"
+                                    <button class="btn btn-info btn-sm" onclick="viewFileById('{{ file.id }}')"
                                         title="View file">
                                         <i class="fas fa-eye"></i>
                                     </button>
-                                    <button class="btn btn-danger btn-sm" onclick="deleteFile('{{ file.id }}')" title="Delete file">
+                                    <button class="btn btn-danger btn-sm" onclick="deleteFile('{{ file.id }}')"
+                                        title="Delete file">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                 </div>
@@ -185,6 +191,30 @@
             document.getElementById('fileTitle').textContent = title || 'Untitled';
             document.getElementById('fileContent').textContent = content;
             new bootstrap.Modal(document.getElementById('viewFileModal')).show();
+        };
+
+        // New function to safely view files by ID using existing table data
+        window.viewFileById = function(id) {
+            // Find the table row with this file ID
+            const row = document.querySelector(`tr[data-file-id="${id}"]`);
+            if (row) {
+                // Get the full filename and content from data attributes
+                const filename = row.getAttribute('data-filename') || 'Untitled';
+                const content = row.getAttribute('data-content') || 'No content available';
+                
+                // Decode the content (convert \n back to actual newlines)
+                const decodedContent = content.replace(/\\n/g, '\n');
+                
+                // Show the modal with the full data
+                document.getElementById('fileTitle').textContent = filename;
+                document.getElementById('fileContent').textContent = decodedContent;
+                new bootstrap.Modal(document.getElementById('viewFileModal')).show();
+            } else {
+                // Fallback if row not found
+                document.getElementById('fileTitle').textContent = 'Error';
+                document.getElementById('fileContent').textContent = 'Could not find file data';
+                new bootstrap.Modal(document.getElementById('viewFileModal')).show();
+            }
         };
 
         // Delete file function
@@ -367,7 +397,7 @@
             fallbackCopyToClipboard(text);
         }
     }
-    
+
     // Fallback copy method for older browsers or non-secure contexts
     function fallbackCopyToClipboard(text) {
         try {
@@ -378,15 +408,15 @@
             textArea.style.left = '-999999px';
             textArea.style.top = '-999999px';
             document.body.appendChild(textArea);
-            
+
             // Select and copy the text
             textArea.focus();
             textArea.select();
             textArea.setSelectionRange(0, 99999); // For mobile devices
-            
+
             const successful = document.execCommand('copy');
             document.body.removeChild(textArea);
-            
+
             if (successful) {
                 toastr.success('Filename copied to clipboard');
             } else {
