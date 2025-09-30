@@ -33,6 +33,27 @@
         color: #666;
         margin-bottom: 5px;
     }
+    
+    /* Mobile responsive adjustments */
+    @media (max-width: 768px) {
+        .image-preview {
+            max-width: 150px;
+            max-height: 150px;
+        }
+        
+        .preview-container {
+            padding: 8px;
+        }
+        
+        .form-control, .form-select {
+            font-size: 16px; /* Prevents zoom on iOS */
+        }
+        
+        .btn {
+            min-height: 44px;
+            padding: 0.5rem 1rem;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -56,80 +77,86 @@
         </div>
         <div class="card-body">
             <form method="POST" action="{{ url_for('main.admin_settings') }}" enctype="multipart/form-data">
-                <div class="mb-3">
-                    <label for="logo" class="form-label required-field">Application Name</label>
-                    <input type="text" class="form-control" id="logo" name="logo" value="{{ settings.get('logo', '') }}"
-                        required>
-                </div>
-
-                <div class="mb-3">
-                    <label for="logo_file" class="form-label">Logo Image</label>
-                    <input type="file" class="form-control" id="logo_file" name="logo_file" accept="image/*">
-                    <div class="preview-container">
-                        <div class="preview-label">Current Logo:</div>
-                        {% if settings.get('logo_file') %}
-                        <img src="{{ url_for('static', filename='uploads/' + settings.get('logo_file')) }}"
-                            class="image-preview" id="logoPreview">
-                        {% else %}
-                        <div class="text-muted">No logo uploaded</div>
-                        {% endif %}
+                <div class="row">
+                    <div class="col-lg-6 col-md-12 mb-3">
+                        <label for="logo" class="form-label required-field">Application Name</label>
+                        <input type="text" class="form-control" id="logo" name="logo" value="{{ settings.get('logo', '') }}"
+                            required>
+                    </div>
+                    
+                    <div class="col-lg-6 col-md-12 mb-3">
+                        <label for="show_matched_text" class="form-label">Show Matched Text</label>
+                        <select class="form-select" id="show_matched_text" name="show_matched_text">
+                            <option value="yes" {% if settings.get('show_matched_text') == 'yes' %}selected{% endif %}>Yes</option>
+                            <option value="no" {% if settings.get('show_matched_text') == 'no' %}selected{% endif %}>No</option>
+                        </select>
                     </div>
                 </div>
 
-                <div class="mb-3">
-                    <label for="favicon_file" class="form-label">Favicon</label>
-                    <input type="file" class="form-control" id="favicon_file" name="favicon_file" accept="image/">
-                    <div class="preview-container">
-                        <div class="preview-label">Current Favicon:</div>
-                        {% if settings.get('favicon_file') %}
-                        <img src="{{ url_for('static', filename='uploads/' + settings.get('favicon_file')) }}"
-                            class="image-preview" id="faviconPreview">
-                        {% else %}
-                        <div class="text-muted">No favicon uploaded</div>
-                        {% endif %}
+                <div class="row">
+                    <div class="col-lg-6 col-md-12 mb-3">
+                        <label for="logo_file" class="form-label">Logo Image</label>
+                        <input type="file" class="form-control" id="logo_file" name="logo_file" accept="image/*">
+                        <div class="preview-container">
+                            <div class="preview-label">Current Logo:</div>
+                            {% if settings.get('logo_file') %}
+                            <img src="{{ url_for('static', filename='uploads/' + settings.get('logo_file')) }}"
+                                class="image-preview" id="logoPreview">
+                            {% else %}
+                            <div class="text-muted">No logo uploaded</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6 col-md-12 mb-3">
+                        <label for="favicon_file" class="form-label">Favicon</label>
+                        <input type="file" class="form-control" id="favicon_file" name="favicon_file" accept="image/*">
+                        <div class="preview-container">
+                            <div class="preview-label">Current Favicon:</div>
+                            {% if settings.get('favicon_file') %}
+                            <img src="{{ url_for('static', filename='uploads/' + settings.get('favicon_file')) }}"
+                                class="image-preview" id="faviconPreview">
+                            {% else %}
+                            <div class="text-muted">No favicon uploaded</div>
+                            {% endif %}
+                        </div>
                     </div>
                 </div>
-                <!-- show matched text yes/no toggle -->
-                <div class="mb-3">
-                    <label for="show_matched_text" class="form-label">Show Matched Text</label>
-                    <select class="form-select" id="show_matched_text" name="show_matched_text" >
-                        <option value="yes" {% if settings.get('show_matched_text') == 'yes' %}selected{% endif %}>Yes</option>
-                        <option value="no" {% if settings.get('show_matched_text') == 'no' %}selected{% endif %}>No</option>
-                    </select>
-                </div>
 
-                <div class="mb-3">
-                    <label for="openai_key" class="form-label required-field">OpenAI API Key</label>
-                    <input type="password" class="form-control" id="openai_key" name="openai_key"
-                        value="{{ settings.get('openai_key', '') }}" required>
-                </div>
-                <!-- select openai models -->
-                <div class="mb-3">
-                    <label for="openai_model" class="form-label required-field">OpenAI Model</label>
-                    <select class="form-select" id="openai_model" name="openai_model" required>
-                        {% for model in models %}
-                        <option value="{{ model }}" {% if settings.get('openai_model')==model %}selected{% endif %}>
-                            {{ model }}
-                        </option>
-                        {% endfor %}
-                    </select>
+                <div class="row">
+                    <div class="col-lg-6 col-md-12 mb-3">
+                        <label for="openai_key" class="form-label required-field">OpenAI API Key</label>
+                        <input type="password" class="form-control" id="openai_key" name="openai_key"
+                            value="{{ settings.get('openai_key', '') }}" required>
+                    </div>
+                    <div class="col-lg-6 col-md-12 mb-3">
+                        <label for="openai_model" class="form-label required-field">OpenAI Model</label>
+                        <select class="form-select" id="openai_model" name="openai_model" required>
+                            {% for model in models %}
+                            <option value="{{ model }}" {% if settings.get('openai_model')==model %}selected{% endif %}>
+                                {{ model }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
                 </div>
 
                 <div class="mb-3">
                     <label for="copyright" class="form-label">Copyright Text</label>
                     <input type="text" class="form-control" id="copyright" name="copyright"
-                        value="{{ settings.get('copyright', '') }}">
+                        value="{{ settings.get('copyright', '') }}" placeholder="Enter copyright text...">
                 </div>
                 <div class="mb-3">
                     <label for="about" class="form-label">About Page Content</label>
-                    <textarea class="form-control" id="about" name="about">{{ settings.get('about', '') }}</textarea>
+                    <textarea class="form-control" id="about" name="about" rows="4" placeholder="Enter about page content...">{{ settings.get('about', '') }}</textarea>
                 </div>
                 <div class="mb-3">
                     <label for="contact" class="form-label">Contact Page Content</label>
-                    <textarea class="form-control" id="contact"
-                        name="contact">{{ settings.get('contact', '') }}</textarea>
+                    <textarea class="form-control" id="contact" name="contact" rows="3" placeholder="Enter contact page content...">{{ settings.get('contact', '') }}</textarea>
                 </div>
-                <button type="submit" class="btn btn-primary">Save Settings</button>
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="submit" class="btn btn-primary btn-lg">Save Settings</button>
+                </div>
             </form>
         </div>
     </div>

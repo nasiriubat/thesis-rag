@@ -40,43 +40,48 @@
         </div>
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-bordered">
+                <table class="table table-bordered table-mobile-cards">
                     <thead>
                         <tr>
                             <th width="2%">ID</th>
-                            <th width="25%">File Name</th>
-                            <th width="40%">Content Preview</th>
+                            <th width="28%">File Name</th>
+                            <th width="35%">Content Preview</th>
                             <th width="15%">Uploaded By</th>
                             <th width="10%">Created At</th>
-                            <th width="5%">Actions</th>
+                            <th width="10%">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for file in files %}
                         <tr data-file-id="{{ file.id }}">
-                            <td class="col-idx">{{ loop.index }}</td>
-                            <td class="col-filename">{{ file.original_filename[:60] }}{% if file.original_filename|length > 60 %}.....{% endif %} 
-                                <!-- add a copy button -->
-                                <button class="btn  btn-sm" onclick="copyToClipboard('{{ file.original_filename }}')">
-                                    <i class="fas fa-copy text-primary"></i>
-                                </button>
+                            <td class="col-idx" data-label="ID">{{ loop.index }}</td>
+                            <td class="col-filename" data-label="File Name">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <span class="text-truncate me-2" style="max-width: 200px;">{{ file.original_filename }}</span>
+                                    <button class="btn btn-sm btn-outline-primary" onclick="copyToClipboard('{{ file.original_filename }}')" title="Copy filename">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
                             </td>
-                            <td class="col-text">
-                                {{ file.text[:60] }}{% if file.text|length > 60 %}...{% endif %}
+                            <td class="col-text" data-label="Content Preview">
+                                <span class="text-truncate d-block" style="max-width: 300px;">{{ file.text[:100] }}{% if file.text|length > 100 %}...{% endif %}</span>
                             </td>
-                            <td class="col-user">{{ file.user.name }}</td>
-                            <td class="col-date">{{ file.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                            <td class="col-actions">
-                                <button class="btn btn-info btn-sm"
-                                    onclick="viewFile('{{ file.id }}', '{{ file.text|replace("'", "\\'")|replace("
-                                    \n", "\\n" ) }}', '{{ file.summary|replace("'", " \\'")|replace("\n", "\\n" ) if
-                                    file.summary else "" }}', '{{ file.original_filename|replace("'", " \\'") if
-                                    file.original_filename else "" }}')">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                <button class="btn btn-danger btn-sm" onclick="deleteFile('{{ file.id }}')">
-                                    <i class="fas fa-trash"></i>
-                                </button>
+                            <td class="col-user" data-label="Uploaded By">{{ file.user.name }}</td>
+                            <td class="col-date" data-label="Created At">{{ file.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td class="col-actions" data-label="Actions">
+                                <div class="btn-group" role="group">
+                                    <button class="btn btn-info btn-sm"
+                                        onclick="viewFile('{{ file.id }}', '{{ file.text|replace("'", "\\'")|replace("
+                                        \n", "\\n" ) }}', '{{ file.summary|replace("'", " \\'")|replace("\n", "\\n" ) if
+                                        file.summary else "" }}', '{{ file.original_filename|replace("'", " \\'") if
+                                        file.original_filename else "" }}')"
+                                        title="View file">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <button class="btn btn-danger btn-sm" onclick="deleteFile('{{ file.id }}')" title="Delete file">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -89,17 +94,18 @@
 
 <!-- Upload File Modal -->
 <div class="modal fade" id="uploadFileModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Upload New File</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="uploadFileForm" method="POST" action="{{ url_for('main.api_upload_file') }}"
                 enctype="multipart/form-data">
                 <input type="hidden" id="uploadType" name="uploadType">
                 <div class="modal-body">
                     <div class="mb-3">
+                        <label for="fileType" class="form-label">Upload Type</label>
                         <select class="form-select" id="fileType" name="fileType" required>
                             <option value="">Choose upload type...</option>
                             <option value="file">File Upload</option>
@@ -133,7 +139,7 @@
                         <small class="text-muted">Enter or paste your text content</small>
                     </div>
                 </div>
-                <div class="modal-footer">
+                <div class="modal-footer d-flex flex-column flex-sm-row gap-2">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                     <button type="submit" class="btn btn-primary">Upload</button>
                 </div>
@@ -144,21 +150,21 @@
 
 <!-- View File Modal -->
 <div class="modal fade" id="viewFileModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">File Content</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <div class="mb-3">
                     <h6>File Title</h6>
-                    <p id="fileTitle" class="text-primary fw-bold"></p>
+                    <p id="fileTitle" class="text-primary fw-bold text-break"></p>
                 </div>
                 <div class="mb-3">
                     <h6>Content</h6>
-                    <div id="fileContent" class="bg-light p-3"
-                        style="max-height: 500px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; line-height: 1.5;">
+                    <div id="fileContent" class="bg-light p-3 rounded"
+                        style="max-height: 60vh; overflow-y: auto; white-space: pre-wrap; font-family: monospace; line-height: 1.5; word-break: break-word;">
                     </div>
                 </div>
             </div>
@@ -345,13 +351,51 @@
             });
         }
     });
-    // Copy to clipboard function
+    // Copy to clipboard function with fallback
     function copyToClipboard(text) {
-        navigator.clipboard.writeText(text).then(function () {
-            toastr.success('Filename copied to clipboard');
-        }, function (err) {
-            toastr.error('Could not copy text: ', err);
-        });
+        // Check if clipboard API is available
+        if (navigator.clipboard && window.isSecureContext) {
+            // Use modern clipboard API
+            navigator.clipboard.writeText(text).then(function () {
+                toastr.success('Filename copied to clipboard');
+            }).catch(function (err) {
+                console.error('Clipboard API failed:', err);
+                fallbackCopyToClipboard(text);
+            });
+        } else {
+            // Use fallback method
+            fallbackCopyToClipboard(text);
+        }
+    }
+    
+    // Fallback copy method for older browsers or non-secure contexts
+    function fallbackCopyToClipboard(text) {
+        try {
+            // Create a temporary textarea element
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '-999999px';
+            document.body.appendChild(textArea);
+            
+            // Select and copy the text
+            textArea.focus();
+            textArea.select();
+            textArea.setSelectionRange(0, 99999); // For mobile devices
+            
+            const successful = document.execCommand('copy');
+            document.body.removeChild(textArea);
+            
+            if (successful) {
+                toastr.success('Filename copied to clipboard');
+            } else {
+                toastr.error('Could not copy text to clipboard');
+            }
+        } catch (err) {
+            console.error('Fallback copy failed:', err);
+            toastr.error('Could not copy text to clipboard');
+        }
     }
 </script>
 {% endblock %}

@@ -14,7 +14,7 @@
     
     <!-- Statistics Cards -->
     <div class="row">
-        <div class="col-xl-3 col-md-6 mb-4">
+        <div class="col-xl-3 col-lg-6 col-md-6 col-sm-12 mb-4">
             <div class="card border-left-primary shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
@@ -31,7 +31,7 @@
             </div>
         </div>
 
-        <div class="col-xl-3 col-md-6 mb-4">
+        <div class="col-xl-3 col-lg-6 col-md-6 col-sm-12 mb-4">
             <div class="card border-left-success shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
@@ -48,7 +48,7 @@
             </div>
         </div>
 
-        <div class="col-xl-3 col-md-6 mb-4">
+        <div class="col-xl-3 col-lg-6 col-md-6 col-sm-12 mb-4">
             <div class="card border-left-info shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
@@ -65,7 +65,7 @@
             </div>
         </div>
 
-        <div class="col-xl-3 col-md-6 mb-4">
+        <div class="col-xl-3 col-lg-6 col-md-6 col-sm-12 mb-4">
             <div class="card border-left-warning shadow h-100 py-2">
                 <div class="card-body">
                     <div class="row no-gutters align-items-center">
@@ -86,17 +86,17 @@
     <!-- Recent Activity -->
     <div class="row">
         <!-- Recent New Questions -->
-        <div class="col-lg-6 mb-4">
+        <div class="col-lg-6 col-md-12 mb-4">
             <div class="card shadow mb-4">
-                <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 font-weight-bold text-primary">Recent New Questions</h6>
+                <div class="card-header py-3 d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center">
+                    <h6 class="m-0 font-weight-bold text-primary mb-2 mb-md-0">Recent New Questions</h6>
                     <a href="{{ url_for('main.admin_new_questions') }}" class="btn btn-primary btn-sm">
                         <i class="fas fa-external-link-alt"></i> View All
                     </a>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-bordered">
+                        <table class="table table-bordered table-mobile-cards">
                             <thead>
                                 <tr>
                                     <th>Question</th>
@@ -107,9 +107,9 @@
                             <tbody>
                                 {% for question in new_questions[:5] %}
                                 <tr>
-                                    <td>{{ question.question[:50] }}...</td>
-                                    <td>{{ question.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                                    <td>
+                                    <td data-label="Question">{{ question.question[:50] }}...</td>
+                                    <td data-label="Date">{{ question.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td data-label="Action" class="col-actions">
                                         <button class="btn btn-primary btn-sm" onclick="answerQuestion({{ question.id }}, '{{ question.question|replace("'", "\\'") }}')">
                                             <i class="fas fa-reply"></i> Answer
                                         </button>
@@ -124,14 +124,14 @@
         </div>
 
         <!-- Recent Files -->
-        <div class="col-lg-6 mb-4">
+        <div class="col-lg-6 col-md-12 mb-4">
             <div class="card shadow mb-4">
                 <div class="card-header py-3">
                     <h6 class="m-0 font-weight-bold text-primary">Recent Files</h6>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
-                        <table class="table table-bordered">
+                        <table class="table table-bordered table-mobile-cards">
                             <thead>
                                 <tr>
                                     <th>File Name</th>
@@ -142,9 +142,9 @@
                             <tbody>
                                 {% for file in files[-5:]|reverse %}
                                 <tr>
-                                    <td>{{ file.text[:50] }}...</td>
-                                    <td>{{ file.user.name }}</td>
-                                    <td>{{ file.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                    <td data-label="File Name">{{ file.original_filename[:50] }}...</td>
+                                    <td data-label="Uploaded By">{{ file.user.name }}</td>
+                                    <td data-label="Date">{{ file.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -158,24 +158,24 @@
 
 <!-- Answer Question Modal -->
 <div class="modal fade" id="answerQuestionModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Answer Question</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="answerQuestionForm" method="POST">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">Question</label>
-                        <p id="questionText" class="form-control-plaintext"></p>
+                        <p id="questionText" class="form-control-plaintext bg-light p-3 rounded"></p>
                     </div>
                     <div class="mb-3">
                         <label for="answer" class="form-label">Answer</label>
-                        <textarea class="form-control" id="answer" name="answer" rows="5" required></textarea>
+                        <textarea class="form-control" id="answer" name="answer" rows="5" required placeholder="Enter your answer here..."></textarea>
                     </div>
                 </div>
-                <div class="modal-footer">
+                <div class="modal-footer d-flex flex-column flex-sm-row gap-2">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                     <button type="submit" class="btn btn-primary">Save Answer</button>
                 </div>

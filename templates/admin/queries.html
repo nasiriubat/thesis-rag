@@ -23,7 +23,7 @@
         </div>
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-bordered">
+                <table class="table table-bordered table-mobile-cards">
                     <thead>
                         <tr>
                             <th>ID</th>
@@ -37,16 +37,18 @@
                     <tbody>
                         {% for query in queries %}
                         <tr>
-                            <td>{{ loop.index }}</td>
-                            <td>{{ query.question[:100] }}{% if query.question|length > 100 %}...{% endif %}</td>
-                            <td>
+                            <td data-label="ID">{{ loop.index }}</td>
+                            <td data-label="Question">
+                                <span class="text-truncate d-block" style="max-width: 300px;">{{ query.question[:100] }}{% if query.question|length > 100 %}...{% endif %}</span>
+                            </td>
+                            <td data-label="Answer Found">
                                 {% if query.answer_found %}
                                 <span class="badge bg-success">Yes</span>
                                 {% else %}
                                 <span class="badge bg-danger">No</span>
                                 {% endif %}
                             </td>
-                            <td>
+                            <td data-label="User Feedback">
                                 {% if query.happy is none %}
                                 <span class="badge bg-secondary">No Feedback</span>
                                 {% elif query.happy %}
@@ -55,14 +57,14 @@
                                 <span class="badge bg-danger">Not Happy</span>
                                 {% endif %}
                             </td>
-                            <td>{{ query.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                            <td>
+                            <td data-label="Created At">{{ query.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            <td data-label="Actions" class="col-actions">
                                 {% if query.answer_found and query.happy %}
-                                <button class="btn btn-sm btn-success" onclick="addToFAQ({{ query.id }}, true)">
+                                <button class="btn btn-sm btn-success" onclick="addToFAQ({{ query.id }}, true)" title="Add to FAQ">
                                     <i class="fas fa-plus"></i> Add to FAQ
                                 </button>
                                 {% else %}
-                                <button class="btn btn-sm btn-primary" onclick="addToFAQ({{ query.id }}, false)">
+                                <button class="btn btn-sm btn-primary" onclick="addToFAQ({{ query.id }}, false)" title="Write Answer & Add">
                                     <i class="fas fa-edit"></i> Write Answer & Add
                                 </button>
                                 {% endif %}
@@ -78,24 +80,24 @@
 
 <!-- Add to FAQ Modal -->
 <div class="modal fade" id="addToFAQModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Add to FAQ</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="addToFAQForm">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">Question</label>
-                        <input type="text" class="form-control" id="faqQuestion" name="question" required>
+                        <input type="text" class="form-control" id="faqQuestion" name="question" required placeholder="Enter the question...">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Answer</label>
-                        <textarea class="form-control" id="faqAnswer" name="answer" rows="5" required></textarea>
+                        <textarea class="form-control" id="faqAnswer" name="answer" rows="5" required placeholder="Enter the answer..."></textarea>
                     </div>
                 </div>
-                <div class="modal-footer">
+                <div class="modal-footer d-flex flex-column flex-sm-row gap-2">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
                     <button type="submit" class="btn btn-primary">Save FAQ</button>
                 </div>
