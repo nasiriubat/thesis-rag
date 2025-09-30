@@ -12,7 +12,7 @@ from flask import (
 from sqlalchemy import func
 from flask_login import login_user, login_required, logout_user, current_user
 from models import db, User, Role, FAQ, File, Query, Settings, NewQuestion
-from urllib.parse import urlparse
+from urllib.parse import urlparse,parse_qs
 
 from werkzeug.security import generate_password_hash
 from datetime import datetime
@@ -31,8 +31,6 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 import re
-from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_transcript_api.formatters import TextFormatter
 from pathlib import Path
 from werkzeug.utils import secure_filename
 import time
@@ -674,7 +672,7 @@ def extract_text_from_file(file_or_url):
                 parsed_url = urlparse(file_or_url)
                 netloc = parsed_url.netloc.replace("www.", "").lower()
                 if netloc in ["youtube.com", "youtu.be"]:
-                    return extract_youtube_text(file_or_url)
+                    raise ValueError("YouTube URLs are not supported. Please use other types of URLs like web pages, PDFs, or documents.")
                 return extract_webpage_text(file_or_url)
             else:
                 return file_or_url.strip()  # raw text (e.g., from textarea)
@@ -703,55 +701,6 @@ def extract_text_from_file(file_or_url):
     except Exception as e:
         print(f"Error extracting text: {str(e)}")
         return None
-
-
-def extract_youtube_text(url):
-    """Extract text from YouTube video using transcript."""
-    try:
-        # Extract video ID from URL
-        video_id = None
-
-        # Handle different YouTube URL formats
-        if "youtube.com" in url:
-            # Handle standard YouTube URLs
-            if "v=" in url:
-                video_id = re.search(r"v=([^&]+)", url).group(1)
-            # Handle YouTube Shorts
-            elif "/shorts/" in url:
-                video_id = url.split("/shorts/")[1].split("?")[0]
-            # Handle YouTube channel URLs
-            elif "/channel/" in url or "/user/" in url:
-                return None
-        elif "youtu.be" in url:
-            # Handle shortened YouTube URLs
-            video_id = url.split("/")[-1].split("?")[0]
-
-        if not video_id:
-            print(f"Could not extract video ID from URL: {url}")
-            return None
-
-        try:
-            # Try to get transcript
-            transcript = YouTubeTranscriptApi.get_transcript(video_id)
-            formatter = TextFormatter()
-            return formatter.format_transcript(transcript)
-        except Exception as e:
-            print(f"Error getting transcript for video {video_id}: {str(e)}")
-            # Try to get transcript in a different language if available
-            try:
-                transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-                # Try to get transcript in English or any available language
-                transcript = transcript_list.find_transcript(["en"]).fetch()
-                formatter = TextFormatter()
-                return formatter.format_transcript(transcript)
-            except Exception as e2:
-                print(f"Error getting alternative transcript: {str(e2)}")
-                return None
-
-    except Exception as e:
-        print(f"Error extracting YouTube transcript: {str(e)}")
-        return None
-
 
 def generate_filename(source, content=None):
     """Generate a unique filename based on the source type and content."""
@@ -1264,7 +1213,7 @@ def api_get_query(id):
     except Exception as e:
         return jsonify({"type": "error", "message": str(e)}), 500
 
-def extract_webpage_text(url, headless=True, wait_time=3):
+def extract_webpage_text(url, headless=True, wait_time=1):
     """
     Extract clean text from webpage using Selenium WebDriver.
     

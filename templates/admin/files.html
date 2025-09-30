@@ -2,7 +2,7 @@
 
 {% block extra_css %}
 <style>
-    table td {
+  table td {
         word-wrap: break-word;
         /* allow breaking long words */
         white-space: normal;
@@ -13,10 +13,255 @@
 
     table th,
     table td {
-        padding: 8px;
-    }
+    padding: 8px;
+  }
 
-    /* Set column widths */
+  /* Set column widths */
+
+    /* Upload Area Styles */
+    .upload-area {
+        border: 2px dashed #dee2e6;
+        border-radius: 12px;
+        padding: 3rem 2rem;
+        text-align: center;
+        transition: all 0.3s ease;
+        background: #f8f9fa;
+        cursor: pointer;
+    }
+    
+    .upload-area:hover {
+        border-color: #0d6efd;
+        background: #e7f3ff;
+    }
+    
+    .upload-area.dragover {
+        border-color: #0d6efd;
+        background: #e7f3ff;
+        transform: scale(1.02);
+    }
+    
+    .upload-content h5 {
+        color: #495057;
+        margin-bottom: 0.5rem;
+    }
+    
+    /* File List Styles */
+    .file-item, .url-item {
+        background: #fff;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        transition: all 0.2s ease;
+    }
+    
+    .file-item:hover, .url-item:hover {
+        border-color: #0d6efd;
+        box-shadow: 0 2px 8px rgba(13, 110, 253, 0.1);
+    }
+    
+    .file-info, .url-info {
+        display: flex;
+        align-items: center;
+        flex: 1;
+    }
+    
+    .file-icon, .url-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 1rem;
+        font-size: 1.2rem;
+    }
+    
+    .file-icon {
+        background: #e3f2fd;
+        color: #1976d2;
+    }
+    
+    .url-icon {
+        background: #f3e5f5;
+        color: #7b1fa2;
+    }
+    
+    .file-details, .url-details {
+        flex: 1;
+    }
+    
+    .file-name, .url-text {
+        font-weight: 500;
+        color: #212529;
+        margin-bottom: 0.25rem;
+        word-break: break-all;
+    }
+    
+    .file-size, .url-domain {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+    
+    .remove-btn {
+        background: none;
+        border: none;
+        color: #dc3545;
+        font-size: 1.2rem;
+        padding: 0.5rem;
+        border-radius: 50%;
+        transition: all 0.2s ease;
+    }
+    
+    .remove-btn:hover {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    /* Tab Styles */
+    .nav-tabs .nav-link {
+        border: none;
+        border-bottom: 3px solid transparent;
+        color: #6c757d;
+        font-weight: 500;
+        padding: 1rem 1.5rem;
+    }
+    
+    .nav-tabs .nav-link:hover {
+        border-color: transparent;
+        border-bottom-color: #dee2e6;
+        color: #495057;
+    }
+    
+    .nav-tabs .nav-link.active {
+        border-color: transparent;
+        border-bottom-color: #0d6efd;
+        color: #0d6efd;
+        background: none;
+    }
+    
+    /* Progress Bar */
+    .upload-progress {
+        height: 6px;
+        border-radius: 3px;
+        background: #e9ecef;
+        overflow: hidden;
+        margin-top: 0.5rem;
+    }
+    
+    .upload-progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, #0d6efd, #6610f2);
+        transition: width 0.3s ease;
+        border-radius: 3px;
+    }
+    
+    /* Status Badges */
+    .status-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+        border-radius: 12px;
+        font-weight: 500;
+    }
+    
+    .status-pending {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .status-uploading {
+        background: #cce5ff;
+        color: #004085;
+    }
+    
+    .status-success {
+        background: #d1edff;
+        color: #0c5460;
+    }
+    
+    .status-error {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    /* Status-based item styling */
+    .file-item.status-uploading, .url-item.status-uploading {
+        border-color: #0d6efd;
+        background: #f8f9ff;
+    }
+    
+    .file-item.status-success, .url-item.status-success {
+        border-color: #198754;
+        background: #f0fff4;
+    }
+    
+    .file-item.status-error, .url-item.status-error {
+        border-color: #dc3545;
+        background: #fff5f5;
+    }
+    
+    /* Upload progress animation */
+    .upload-progress-bar {
+        position: relative;
+        overflow: hidden;
+    }
+    
+    .upload-progress-bar::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+        animation: progressShine 2s infinite;
+    }
+    
+    @keyframes progressShine {
+        0% { left: -100%; }
+        100% { left: 100%; }
+    }
+    
+    /* Upload area states */
+    .upload-area.uploading {
+        border-color: #0d6efd;
+        background: #e7f3ff;
+        pointer-events: none;
+    }
+    
+    .upload-area.uploading .upload-content {
+        opacity: 0.6;
+    }
+    
+    /* Button states during upload */
+    .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    
+    /* Success/Error animations */
+    .file-item.status-success, .url-item.status-success {
+        animation: successPulse 0.6s ease-in-out;
+    }
+    
+    .file-item.status-error, .url-item.status-error {
+        animation: errorShake 0.6s ease-in-out;
+    }
+    
+    @keyframes successPulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.02); }
+        100% { transform: scale(1); }
+    }
+    
+    @keyframes errorShake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-5px); }
+        75% { transform: translateX(5px); }
+    }
 </style>
 <link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet">
 {% endblock %}
@@ -67,7 +312,7 @@
                                     <button class="btn btn-sm btn-outline-primary"
                                         onclick="copyToClipboard('{{ file.original_filename }}')" title="Copy filename">
                                         <i class="fas fa-copy"></i>
-                                    </button>
+                                </button>
                                 </div>
                             </td>
                             <td class="col-text" data-label="Content Preview">
@@ -81,12 +326,12 @@
                                 <div class="btn-group" role="group">
                                     <button class="btn btn-info btn-sm" onclick="viewFileById('{{ file.id }}')"
                                         title="View file">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
+                                    <i class="fas fa-eye"></i>
+                                </button>
                                     <button class="btn btn-danger btn-sm" onclick="deleteFile('{{ file.id }}')"
                                         title="Delete file">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
+                                    <i class="fas fa-trash"></i>
+                                </button>
                                 </div>
                             </td>
                         </tr>
@@ -100,56 +345,103 @@
 
 <!-- Upload File Modal -->
 <div class="modal fade" id="uploadFileModal" tabindex="-1">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Upload New File</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-cloud-upload-alt me-2"></i>Add Content to Knowledge Base
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form id="uploadFileForm" method="POST" action="{{ url_for('main.api_upload_file') }}"
-                enctype="multipart/form-data">
-                <input type="hidden" id="uploadType" name="uploadType">
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="fileType" class="form-label">Upload Type</label>
-                        <select class="form-select" id="fileType" name="fileType" required>
-                            <option value="">Choose upload type...</option>
-                            <option value="file">File Upload</option>
-                            <option value="url">URL</option>
-                            <option value="text">Text</option>
-                        </select>
+            <div class="modal-body p-0">
+                <!-- Tab Navigation -->
+                <ul class="nav nav-tabs nav-fill" id="uploadTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="files-tab" data-bs-toggle="tab" data-bs-target="#files" type="button" role="tab">
+                            <i class="fas fa-file-upload me-2"></i>Files
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="urls-tab" data-bs-toggle="tab" data-bs-target="#urls" type="button" role="tab">
+                            <i class="fas fa-link me-2"></i>URLs
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="text-tab" data-bs-toggle="tab" data-bs-target="#text" type="button" role="tab">
+                            <i class="fas fa-edit me-2"></i>Text
+                        </button>
+                    </li>
+                </ul>
+
+                <!-- Tab Content -->
+                <div class="tab-content p-4" id="uploadTabContent">
+                    <!-- Files Tab -->
+                    <div class="tab-pane fade show active" id="files" role="tabpanel">
+                        <div class="upload-area" id="fileUploadArea">
+                            <div class="upload-content text-center">
+                                <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                                <h5>Drag & Drop Files Here</h5>
+                                <p class="text-muted">or click to browse</p>
+                                <input type="file" id="fileInput" name="file" multiple accept=".pdf,.docx,.txt" style="display: none;">
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Supported formats: PDF, DOCX, TXT. Maximum file size: 10MB per file.
+                            </small>
+                        </div>
+                        <div id="fileList" class="mt-3"></div>
                     </div>
 
-                    <!-- File Upload Section -->
-                    <div id="fileUploadSection" class="mb-3" style="display: none;">
-                        <label for="file" class="form-label">Select Files</label>
-                        <input type="file" class="form-control" id="file" name="file" multiple accept=".pdf,.docx,.txt">
-                        <small class="text-muted">Supported formats: PDF, DOCX, TXT. You can select multiple
-                            files.</small>
-                        <div id="fileList" class="mt-2"></div>
+                    <!-- URLs Tab -->
+                    <div class="tab-pane fade" id="urls" role="tabpanel">
+                        <div class="url-input-container">
+                            <div class="input-group mb-3">
+                                <span class="input-group-text">
+                                    <i class="fas fa-link"></i>
+                                </span>
+                                <input type="url" class="form-control" id="urlInput" placeholder="https://example.com/document.pdf">
+                                <button class="btn btn-outline-primary" type="button" id="addUrlBtn">
+                                    <i class="fas fa-plus"></i> Add
+                                </button>
+                            </div>
+                            <small class="text-muted d-block mb-3">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Enter URLs to documents, web pages, or online resources. <strong>YouTube URLs are not supported.</strong>
+                            </small>
+                        </div>
+                        <div id="urlList" class="mt-3"></div>
                     </div>
 
-                    <!-- URL Section -->
-                    <div id="urlSection" class="mb-3" style="display: none;">
-                        <label for="url" class="form-label">Enter URL</label>
-                        <input type="url" class="form-control" id="url" name="url"
-                            placeholder="https://example.com/document.pdf">
-                        <small class="text-muted">Enter a valid URL to the document</small>
-                    </div>
-
-                    <!-- Text Section -->
-                    <div id="textSection" class="mb-3" style="display: none;">
-                        <label for="text" class="form-label">Enter Text</label>
-                        <textarea class="form-control" id="text" name="text" rows="5"
-                            placeholder="Enter your text here..."></textarea>
-                        <small class="text-muted">Enter or paste your text content</small>
+                    <!-- Text Tab -->
+                    <div class="tab-pane fade" id="text" role="tabpanel">
+                        <div class="mb-3">
+                            <label for="textContent" class="form-label">Text Content</label>
+                            <textarea class="form-control" id="textContent" rows="10" placeholder="Enter or paste your text content here..."></textarea>
+                        </div>
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle me-1"></i>
+                            This text will be added to the knowledge base for AI to reference.
+                        </small>
                     </div>
                 </div>
-                <div class="modal-footer d-flex flex-column flex-sm-row gap-2">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="submit" class="btn btn-primary">Upload</button>
+            </div>
+            <div class="modal-footer bg-light">
+                <div class="d-flex justify-content-between w-100">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </button>
+                    <div>
+                        <button type="button" class="btn btn-outline-primary me-2" id="saveAndAddMoreBtn" style="display: none;">
+                            <i class="fas fa-plus me-2"></i>Save & Add More
+                        </button>
+                        <button type="button" class="btn btn-primary" id="saveBtn">
+                            <i class="fas fa-save me-2"></i>Save Content
+                        </button>
+                    </div>
                 </div>
-            </form>
+                </div>
         </div>
     </div>
 </div>
@@ -243,151 +535,639 @@
             }
         };
 
-        // File type selection handler
-        const fileTypeSelect = document.getElementById('fileType');
-        fileTypeSelect.addEventListener('change', function () {
-            document.getElementById('uploadType').value = this.value;
-        });
-        if (fileTypeSelect) {
-            fileTypeSelect.addEventListener('change', function () {
-                document.getElementById('fileUploadSection').style.display = 'none';
-                document.getElementById('urlSection').style.display = 'none';
-                document.getElementById('textSection').style.display = 'none';
+        // Global variables for managing uploads
+        let selectedFiles = [];
+        let selectedUrls = [];
+        let currentUploadType = 'file';
 
-                const selectedType = this.value;
-                if (selectedType === 'file') {
-                    document.getElementById('fileUploadSection').style.display = 'block';
-                } else if (selectedType === 'url') {
-                    document.getElementById('urlSection').style.display = 'block';
-                } else if (selectedType === 'text') {
-                    document.getElementById('textSection').style.display = 'block';
-                }
-            });
-        }
+        // File upload area drag and drop
+        const fileUploadArea = document.getElementById('fileUploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+
+        // Drag and drop handlers
+        fileUploadArea.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            fileUploadArea.classList.add('dragover');
+        });
+
+        fileUploadArea.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            fileUploadArea.classList.remove('dragover');
+        });
+
+        fileUploadArea.addEventListener('drop', function(e) {
+            e.preventDefault();
+            fileUploadArea.classList.remove('dragover');
+            const files = Array.from(e.dataTransfer.files);
+            addFiles(files);
+        });
+
+        fileUploadArea.addEventListener('click', function() {
+            fileInput.click();
+        });
 
         // File input change handler
-        const fileInput = document.getElementById('file');
-        const fileList = document.getElementById('fileList');
-        if (fileInput) {
-            fileInput.addEventListener('change', function () {
-                fileList.innerHTML = '';
-                if (this.files.length > 0) {
-                    const ul = document.createElement('ul');
-                    ul.className = 'list-group';
-                    Array.from(this.files).forEach(file => {
-                        const li = document.createElement('li');
-                        li.className = 'list-group-item d-flex justify-content-between align-items-center';
-                        li.innerHTML = `
-                        ${file.name}
-                        <span class="badge bg-primary rounded-pill">${(file.size / 1024).toFixed(1)} KB</span>
-                    `;
-                        ul.appendChild(li);
-                    });
-                    fileList.appendChild(ul);
+        fileInput.addEventListener('change', function() {
+            const files = Array.from(this.files);
+            addFiles(files);
+        });
+
+        // Add files to the list
+        function addFiles(files) {
+            files.forEach(file => {
+                // Validate file type
+                const validTypes = ['.pdf', '.docx', '.txt'];
+                const ext = '.' + file.name.split('.').pop().toLowerCase();
+                
+                if (!validTypes.includes(ext)) {
+                    toastr.error(`Invalid file type: ${file.name}. Supported types are: PDF, DOCX, TXT`);
+                    return;
                 }
+
+                // Check if file already exists
+                if (selectedFiles.some(f => f.name === file.name && f.size === file.size)) {
+                    toastr.warning(`File ${file.name} is already selected`);
+                    return;
+                }
+
+                selectedFiles.push(file);
+                displayFileItem(file);
             });
+            updateSaveButtons();
         }
 
-        // Form submission handler
-        const uploadForm = document.getElementById('uploadFileForm');
-        if (uploadForm) {
-            uploadForm.addEventListener('submit', function (e) {
-                e.preventDefault();
-                const formData = new FormData(this);
-                const fileType = document.getElementById('fileType').value;
+        // Display file item
+        function displayFileItem(file) {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            fileItem.dataset.fileName = file.name;
+            
+            const fileIcon = getFileIcon(file.name);
+            const fileSize = formatFileSize(file.size);
+            
+            fileItem.innerHTML = `
+                <div class="file-info">
+                    <div class="file-icon">
+                        <i class="${fileIcon}"></i>
+                    </div>
+                    <div class="file-details">
+                        <div class="file-name">${file.name}</div>
+                        <div class="file-size">${fileSize}</div>
+                    </div>
+                </div>
+                <button type="button" class="remove-btn" onclick="removeFile('${file.name}')">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            
+            fileList.appendChild(fileItem);
+        }
 
-                // Debug: Log form data
-                console.log('Form Type:', fileType);
-                for (let pair of formData.entries()) {
-                    console.log(pair[0] + ': ' + pair[1]);
-                }
+        // Remove file from list
+        window.removeFile = function(fileName) {
+            selectedFiles = selectedFiles.filter(f => f.name !== fileName);
+            const fileItem = document.querySelector(`[data-file-name="${fileName}"]`);
+            if (fileItem) {
+                fileItem.remove();
+            }
+            updateSaveButtons();
+        };
 
-                // Validate based on file type
-                if (fileType === 'file') {
-                    const files = document.getElementById('file').files;
-                    if (files.length === 0) {
-                        toastr.error('Please select at least one file');
-                        return;
-                    }
-                    // Validate file types
-                    const validTypes = ['.pdf', '.docx', '.txt'];
-                    for (let file of files) {
-                        const ext = '.' + file.name.split('.').pop().toLowerCase();
-                        if (!validTypes.includes(ext)) {
-                            toastr.error(`Invalid file type: ${file.name}. Supported types are: PDF, DOCX, TXT`);
-                            return;
-                        }
-                    }
-                } else if (fileType === 'url') {
-                    const url = formData.get('url');
-                    if (!url || !url.trim()) {
+        // URL management
+        const urlInput = document.getElementById('urlInput');
+        const addUrlBtn = document.getElementById('addUrlBtn');
+        const urlList = document.getElementById('urlList');
+
+        addUrlBtn.addEventListener('click', addUrl);
+        urlInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                addUrl();
+            }
+        });
+
+        function addUrl() {
+            const url = urlInput.value.trim();
+            if (!url) {
                         toastr.error('Please enter a valid URL');
                         return;
                     }
+
                     try {
                         new URL(url);
                     } catch {
                         toastr.error('Please enter a valid URL');
                         return;
                     }
-                } else if (fileType === 'text') {
-                    const text = formData.get('text');
-                    if (!text || !text.trim()) {
-                        toastr.error('Please enter some text');
+
+            // Check if it's a YouTube URL and reject it
+            const urlObj = new URL(url);
+            const hostname = urlObj.hostname.toLowerCase();
+            if (hostname.includes('youtube.com') || hostname.includes('youtu.be')) {
+                toastr.error('YouTube URLs are not supported. Please use other types of URLs like web pages, PDFs, or documents.');
+                return;
+            }
+
+            // Check if URL already exists
+            if (selectedUrls.includes(url)) {
+                toastr.warning('This URL is already added');
                         return;
                     }
+
+            selectedUrls.push(url);
+            displayUrlItem(url);
+            urlInput.value = '';
+            updateSaveButtons();
+        }
+
+        function displayUrlItem(url) {
+            const urlItem = document.createElement('div');
+            urlItem.className = 'url-item';
+            urlItem.dataset.url = url;
+            
+            const domain = new URL(url).hostname;
+            
+            urlItem.innerHTML = `
+                <div class="url-info">
+                    <div class="url-icon">
+                        <i class="fas fa-link"></i>
+                    </div>
+                    <div class="url-details">
+                        <div class="url-text">${url}</div>
+                        <div class="url-domain">${domain}</div>
+                    </div>
+                </div>
+                <button type="button" class="remove-btn" onclick="removeUrl('${url}')">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            
+            urlList.appendChild(urlItem);
+        }
+
+        window.removeUrl = function(url) {
+            selectedUrls = selectedUrls.filter(u => u !== url);
+            const urlItem = document.querySelector(`[data-url="${url}"]`);
+            if (urlItem) {
+                urlItem.remove();
+            }
+            updateSaveButtons();
+        };
+
+        // Save buttons
+        const saveBtn = document.getElementById('saveBtn');
+        const saveAndAddMoreBtn = document.getElementById('saveAndAddMoreBtn');
+
+        saveBtn.addEventListener('click', function() {
+            uploadContent(false);
+        });
+
+        saveAndAddMoreBtn.addEventListener('click', function() {
+            uploadContent(true);
+        });
+
+        function updateSaveButtons() {
+            const hasContent = selectedFiles.length > 0 || selectedUrls.length > 0 || 
+                              document.getElementById('textContent').value.trim() !== '';
+            
+            // Also check if there's a URL in the input field (for direct saving)
+            const urlInput = document.getElementById('urlInput');
+            const hasUrlInInput = urlInput && urlInput.value.trim() !== '';
+            
+            const canSave = hasContent || hasUrlInInput;
+            
+            saveBtn.style.display = canSave ? 'inline-block' : 'none';
+            saveAndAddMoreBtn.style.display = canSave ? 'inline-block' : 'none';
+        }
+
+        // Upload content
+        function uploadContent(keepModalOpen = false) {
+            const activeTab = document.querySelector('.nav-tabs .nav-link.active').id;
+            
+            if (activeTab === 'files-tab' && selectedFiles.length > 0) {
+                uploadFiles(keepModalOpen);
+            } else if (activeTab === 'urls-tab') {
+                // Check if there are URLs in the list OR a URL in the input field
+                const urlInput = document.getElementById('urlInput');
+                const hasUrlInInput = urlInput && urlInput.value.trim() !== '';
+                
+                if (hasUrlInInput) {
+                    // Auto-add the URL from input field first
+                    addUrl();
+                    // Wait a moment for the URL to be added, then upload all URLs
+                    setTimeout(() => {
+                        uploadUrls(keepModalOpen);
+                    }, 100);
+                } else if (selectedUrls.length > 0) {
+                    uploadUrls(keepModalOpen);
+                } else {
+                    toastr.error('Please add at least one URL to upload');
                 }
+            } else if (activeTab === 'text-tab') {
+                uploadText(keepModalOpen);
+            } else {
+                toastr.error('Please add some content to upload');
+            }
+        }
 
-                const submitButton = this.querySelector('button[type="submit"]');
-                const originalButtonText = submitButton.innerHTML;
-                submitButton.disabled = true;
-                submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+        function uploadFiles(keepModalOpen) {
+            if (selectedFiles.length === 0) {
+                toastr.error('Please select at least one file');
+                return;
+            }
 
-                // Debug: Log the final form data being sent
-                console.log('Sending form data:');
-                for (let pair of formData.entries()) {
-                    console.log(pair[0] + ': ' + pair[1]);
-                }
+            // Disable upload area and buttons
+            disableUploadInterface();
 
-                fetch(this.action, {
+            // Show progress for all files
+            selectedFiles.forEach(file => {
+                updateFileStatus(file.name, 'uploading', 0);
+            });
+
+            // Upload all files at once (backend supports multiple files)
+            const formData = new FormData();
+            formData.append('uploadType', 'file');
+            
+            selectedFiles.forEach(file => {
+                formData.append('file', file);
+            });
+
+            // Simulate progress for better UX
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                progress += 10;
+                selectedFiles.forEach(file => {
+                    updateFileStatus(file.name, 'uploading', Math.min(progress, 90));
+                });
+            }, 200);
+
+            fetch('/api/file', {
                     method: 'POST',
                     body: formData
                 })
-                    .then(response => {
-                        console.log('Response status:', response.status);
-                        return response.json();
-                    })
+            .then(response => response.json())
                     .then(data => {
-                        console.log('Response data:', data);
+                clearInterval(progressInterval);
+                
                         if (data.type === 'success') {
+                    // All files successful
+                    selectedFiles.forEach(file => {
+                        updateFileStatus(file.name, 'success', 100);
+                    });
+                    
+                    setTimeout(() => {
+                        enableUploadInterface();
+                        toastr.success(data.message);
+                        selectedFiles = [];
+                        fileList.innerHTML = '';
+                        
+                        if (!keepModalOpen) {
                             const modal = bootstrap.Modal.getInstance(document.getElementById('uploadFileModal'));
                             modal.hide();
-                            toastr.success(data.message);
                             setTimeout(() => {
                                 window.location.reload();
                             }, 1000);
+                        }
+                    }, 1000);
+                } else {
+                    // Some or all files failed
+                    selectedFiles.forEach(file => {
+                        updateFileStatus(file.name, 'error', 0);
+                    });
+                    
+                    setTimeout(() => {
+                        enableUploadInterface();
+                        toastr.error(data.message);
+                    }, 1000);
+                }
+            })
+            .catch(error => {
+                clearInterval(progressInterval);
+                console.error('Error uploading files:', error);
+                
+                selectedFiles.forEach(file => {
+                    updateFileStatus(file.name, 'error', 0);
+                });
+                
+                setTimeout(() => {
+                    enableUploadInterface();
+                    toastr.error('Network error occurred while uploading files');
+                }, 1000);
+            });
+        }
+
+        function uploadUrls(keepModalOpen) {
+            if (selectedUrls.length === 0) {
+                toastr.error('Please add at least one URL');
+                return;
+            }
+
+            // Disable upload area and buttons
+            disableUploadInterface();
+
+            // Show progress for all URLs
+            selectedUrls.forEach(url => {
+                updateUrlStatus(url, 'uploading', 0);
+            });
+
+            // Upload URLs one by one (backend processes one URL per request)
+            uploadUrlsSequentially(0, keepModalOpen);
+        }
+
+        function uploadUrlsSequentially(index, keepModalOpen) {
+            if (index >= selectedUrls.length) {
+                // All URLs uploaded
+                enableUploadInterface();
+                toastr.success(`Successfully uploaded ${selectedUrls.length} URL(s)`);
+                selectedUrls = [];
+                urlList.innerHTML = '';
+                
+                if (!keepModalOpen) {
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('uploadFileModal'));
+                    modal.hide();
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 1000);
+                }
+                return;
+            }
+
+            const url = selectedUrls[index];
+            const formData = new FormData();
+            formData.append('uploadType', 'url');
+            formData.append('url', url);
+
+            // Debug: Log the form data being sent
+            console.log('Sending URL upload request:');
+            console.log('URL:', url);
+            console.log('Upload Type:', 'url');
+            for (let pair of formData.entries()) {
+                console.log(pair[0] + ': ' + pair[1]);
+            }
+
+            updateUrlStatus(url, 'uploading', 0);
+
+            // Simulate progress for better UX
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                progress += 20;
+                updateUrlStatus(url, 'uploading', Math.min(progress, 90));
+            }, 300);
+
+            fetch('/api/file', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                return response.json();
+            })
+            .then(data => {
+                clearInterval(progressInterval);
+                console.log('Response data:', data);
+                
+                if (data.type === 'success') {
+                    updateUrlStatus(url, 'success', 100);
+                    // Continue with next URL
+                    setTimeout(() => {
+                        uploadUrlsSequentially(index + 1, keepModalOpen);
+                    }, 500);
+                } else {
+                    updateUrlStatus(url, 'error', 0);
+                    toastr.error(`Failed to upload ${url}: ${data.message}`);
+                    // Continue with next URL
+                    setTimeout(() => {
+                        uploadUrlsSequentially(index + 1, keepModalOpen);
+                    }, 1000);
+                }
+            })
+            .catch(error => {
+                clearInterval(progressInterval);
+                console.error('Error uploading URL:', error);
+                updateUrlStatus(url, 'error', 0);
+                
+                // Try to get more detailed error information
+                if (error.message.includes('HTTP 400')) {
+                    toastr.error(`Failed to upload ${url}: Bad request - URL might be invalid or already exists`);
+                } else if (error.message.includes('HTTP 500')) {
+                    toastr.error(`Failed to upload ${url}: Server error - URL processing failed`);
+                } else {
+                    toastr.error(`Failed to upload ${url}: ${error.message}`);
+                }
+                
+                // Continue with next URL
+                setTimeout(() => {
+                    uploadUrlsSequentially(index + 1, keepModalOpen);
+                }, 1000);
+            });
+        }
+
+        function uploadText(keepModalOpen) {
+            const textContent = document.getElementById('textContent').value.trim();
+            
+            if (!textContent) {
+                toastr.error('Please enter some text content');
+                return;
+            }
+
+            // Disable upload area and buttons
+            disableUploadInterface();
+
+            const formData = new FormData();
+            formData.append('uploadType', 'text');
+            formData.append('text', textContent);
+
+            // Show uploading state
+            const saveBtn = document.getElementById('saveBtn');
+            const originalButtonText = saveBtn.innerHTML;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Uploading...';
+
+            fetch('/api/file', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.type === 'success') {
+                    toastr.success(data.message);
+                    document.getElementById('textContent').value = '';
+                    
+                    if (!keepModalOpen) {
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('uploadFileModal'));
+                        modal.hide();
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                    }
                         } else {
                             toastr.error(data.message);
-                            submitButton.disabled = false;
-                            submitButton.innerHTML = originalButtonText;
                         }
                     })
                     .catch(error => {
                         console.error('Error:', error);
-                        toastr.error('An error occurred while uploading');
-                        submitButton.disabled = false;
-                        submitButton.innerHTML = originalButtonText;
-                    });
+                toastr.error('An error occurred while uploading text');
+            })
+            .finally(() => {
+                enableUploadInterface();
+                saveBtn.innerHTML = originalButtonText;
             });
         }
+
+        function updateFileStatus(fileName, status, progress) {
+            const fileItem = document.querySelector(`[data-file-name="${fileName}"]`);
+            if (!fileItem) return;
+
+            const statusBadge = fileItem.querySelector('.status-badge') || createStatusBadge(fileItem);
+            const progressBar = fileItem.querySelector('.upload-progress') || createProgressBar(fileItem);
+
+            // Update status badge
+            statusBadge.className = `status-badge status-${status}`;
+            statusBadge.textContent = getStatusText(status);
+
+            // Update progress bar
+            const progressBarFill = progressBar.querySelector('.upload-progress-bar');
+            progressBarFill.style.width = `${progress}%`;
+
+            // Update file item appearance
+            fileItem.classList.remove('status-pending', 'status-uploading', 'status-success', 'status-error');
+            fileItem.classList.add(`status-${status}`);
+        }
+
+        function updateUrlStatus(url, status, progress) {
+            const urlItem = document.querySelector(`[data-url="${url}"]`);
+            if (!urlItem) return;
+
+            const statusBadge = urlItem.querySelector('.status-badge') || createStatusBadge(urlItem);
+            const progressBar = urlItem.querySelector('.upload-progress') || createProgressBar(urlItem);
+
+            // Update status badge
+            statusBadge.className = `status-badge status-${status}`;
+            statusBadge.textContent = getStatusText(status);
+
+            // Update progress bar
+            const progressBarFill = progressBar.querySelector('.upload-progress-bar');
+            progressBarFill.style.width = `${progress}%`;
+
+            // Update URL item appearance
+            urlItem.classList.remove('status-pending', 'status-uploading', 'status-success', 'status-error');
+            urlItem.classList.add(`status-${status}`);
+        }
+
+        function createStatusBadge(item) {
+            const badge = document.createElement('span');
+            badge.className = 'status-badge status-pending';
+            badge.textContent = 'Pending';
+            
+            const details = item.querySelector('.file-details') || item.querySelector('.url-details');
+            details.appendChild(badge);
+            
+            return badge;
+        }
+
+        function createProgressBar(item) {
+            const progressContainer = document.createElement('div');
+            progressContainer.className = 'upload-progress';
+            progressContainer.innerHTML = '<div class="upload-progress-bar"></div>';
+            
+            const details = item.querySelector('.file-details') || item.querySelector('.url-details');
+            details.appendChild(progressContainer);
+            
+            return progressContainer;
+        }
+
+        function getStatusText(status) {
+            switch (status) {
+                case 'pending': return 'Pending';
+                case 'uploading': return 'Uploading...';
+                case 'success': return 'Success';
+                case 'error': return 'Error';
+                default: return 'Unknown';
+            }
+        }
+
+        function disableUploadInterface() {
+            // Disable upload area
+            fileUploadArea.classList.add('uploading');
+            fileUploadArea.style.pointerEvents = 'none';
+            
+            // Disable save buttons
+            const saveBtn = document.getElementById('saveBtn');
+            const saveAndAddMoreBtn = document.getElementById('saveAndAddMoreBtn');
+            saveBtn.disabled = true;
+            saveAndAddMoreBtn.disabled = true;
+            
+            // Disable URL input
+            const urlInput = document.getElementById('urlInput');
+            const addUrlBtn = document.getElementById('addUrlBtn');
+            urlInput.disabled = true;
+            addUrlBtn.disabled = true;
+            
+            // Disable text inputs
+            const textContent = document.getElementById('textContent');
+            textContent.disabled = true;
+        }
+
+        function enableUploadInterface() {
+            // Enable upload area
+            fileUploadArea.classList.remove('uploading');
+            fileUploadArea.style.pointerEvents = 'auto';
+            
+            // Enable save buttons
+            const saveBtn = document.getElementById('saveBtn');
+            const saveAndAddMoreBtn = document.getElementById('saveAndAddMoreBtn');
+            saveBtn.disabled = false;
+            saveAndAddMoreBtn.disabled = false;
+            
+            // Enable URL input
+            const urlInput = document.getElementById('urlInput');
+            const addUrlBtn = document.getElementById('addUrlBtn');
+            urlInput.disabled = false;
+            addUrlBtn.disabled = false;
+            
+            // Enable text inputs
+            const textContent = document.getElementById('textContent');
+            textContent.disabled = false;
+        }
+
+        // Helper functions
+        function getFileIcon(fileName) {
+            const ext = fileName.split('.').pop().toLowerCase();
+            switch (ext) {
+                case 'pdf': return 'fas fa-file-pdf';
+                case 'docx': return 'fas fa-file-word';
+                case 'txt': return 'fas fa-file-alt';
+                default: return 'fas fa-file';
+            }
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        // Update save buttons when text content changes
+        document.getElementById('textContent').addEventListener('input', updateSaveButtons);
+        
+        // Update save buttons when URL input changes
+        document.getElementById('urlInput').addEventListener('input', updateSaveButtons);
+
     });
     // Copy to clipboard function with fallback
     function copyToClipboard(text) {
         // Check if clipboard API is available
         if (navigator.clipboard && window.isSecureContext) {
             // Use modern clipboard API
-            navigator.clipboard.writeText(text).then(function () {
-                toastr.success('Filename copied to clipboard');
+        navigator.clipboard.writeText(text).then(function () {
+            toastr.success('Filename copied to clipboard');
             }).catch(function (err) {
                 console.error('Clipboard API failed:', err);
                 fallbackCopyToClipboard(text);
