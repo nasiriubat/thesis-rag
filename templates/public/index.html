@@ -906,7 +906,7 @@
                 <ul class="faq-bullets list-unstyled mb-0">
                     {% for faq in faqs %}
                     <li>
-                        <a href="#" class="faq-bullet-link" onclick="askQuestion({{ faq.question|tojson }})">{{ faq.question }}</a>
+                        <a href="#" class="faq-bullet-link" >{{ faq.question }}</a>
                     </li>
                     {% endfor %}
                 </ul>
@@ -941,7 +941,7 @@
                     <ul class="faq-bullets list-unstyled mb-0">
                         {% for faq in faqs %}
                         <li>
-                            <a href="#" class="faq-bullet-link" onclick="askQuestion({{ faq.question|tojson }})">{{ faq.question }}</a>
+                            <a href="#" class="faq-bullet-link" >{{ faq.question }}</a>
                         </li>
                         {% endfor %}
                     </ul>
@@ -959,7 +959,7 @@
                         {% if faqs %}
                             {% for faq in faqs[:6] %}
                             <div class="col-12 col-md-6">
-                                <button class="quick-faq-btn w-100 text-center" onclick="askQuestion({{ faq.question|tojson }})">{{ faq.question }}</button>
+                                <button class="quick-faq-btn w-100 text-center" >{{ faq.question }}</button>
                             </div>
                             {% endfor %}
                         {% endif %}
@@ -1092,10 +1092,10 @@ function addMessage(text, sender, isTemporary = false) {
     if (sender === 'bot' && !isTemporary) {
         content += `
             <div class="feedback-buttons mt-2">
-                <button class="btn btn-sm btn-outline-success me-2" onclick="submitFeedback('${messageId}', 'like','${text}')">
+                <button class="btn btn-sm btn-outline-success me-2 feedback-btn" data-feedback="like" data-message-id="${messageId}">
                     <i class="fas fa-thumbs-up"></i> ${getTranslation('helpful', currentLanguage)}
                 </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="submitFeedback('${messageId}', 'dislike','${text}')">
+                <button class="btn btn-sm btn-outline-danger feedback-btn" data-feedback="dislike" data-message-id="${messageId}">
                     <i class="fas fa-thumbs-down"></i> ${getTranslation('notHelpful', currentLanguage)}
                 </button>
             </div>
@@ -1103,6 +1103,20 @@ function addMessage(text, sender, isTemporary = false) {
     }
     
     messageDiv.innerHTML = content;
+    
+    // Add event listeners for feedback buttons
+    if (sender === 'bot' && !isTemporary) {
+        const feedbackButtons = messageDiv.querySelectorAll('.feedback-btn');
+        feedbackButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const feedback = this.getAttribute('data-feedback');
+                const messageId = this.getAttribute('data-message-id');
+                const messageElement = document.getElementById(messageId);
+                const messageContent = messageElement.querySelector('.visitor-message-content').textContent;
+                submitFeedback(messageId, feedback, messageContent);
+            });
+        });
+    }
     
     // Get the chat messages container
     const chatMessages = document.getElementById('chatMessages');
