@@ -13,9 +13,18 @@
         touch-action: manipulation;
     }
     
+    :root {
+        --primary-color: {{ settings.get('theme_primary_color', '#5b1fa6') }};
+        --secondary-color: {{ settings.get('theme_secondary_color', '#d1aff3') }};
+        --bot-message-color: {{ settings.get('theme_bot_message_color', '#f3f0fa') }};
+        --bg-gradient-start: {{ settings.get('theme_background_start', '#f5f0ff') }};
+        --bg-gradient-end: {{ settings.get('theme_background_end', '#ede3f7') }};
+        --accent-color: {{ settings.get('theme_accent_color', '#5b1fa6') }};
+    }
+
     .visitor-bg {
         height: 100vh;
-        background: linear-gradient(135deg, #f5f0ff 0%, #ede3f7 100%);
+        background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
         display: flex;
         flex-direction: column;
         overflow-y: auto;
@@ -27,7 +36,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #5b1fa6;
+        background: var(--primary-color);
         color: #fff;
         padding: 1rem;
         height: 60px;
@@ -99,13 +108,13 @@
     
     .sidebar-title {
         font-weight: 600;
-        color: #5b1fa6;
+        color: var(--accent-color);
         letter-spacing: 1px;
         font-size: 1.2rem;
     }
     
     .sidebar-divider {
-        border-color: #5b1fa6;
+        border-color: var(--accent-color);
         opacity: 0.2;
         margin: 0.5rem 0;
     }
@@ -133,7 +142,7 @@
     .faq-bullet-link {
         display: inline-block;
         transition: all 0.3s ease;
-        color: #5b1fa6;
+        color: var(--accent-color);
         font-size: 0.95rem;
         text-decoration: none;
         padding: 0.5rem;
@@ -143,7 +152,7 @@
     
     .faq-bullet-link:hover {
         color: #000000;
-        background: #f3f0fa;
+        background: var(--bot-message-color);
         transform: translateX(5px);
     }
     
@@ -181,8 +190,8 @@
     }
     
     .quick-faq-btn:hover {
-        background: #e0d3f7;
-        color: #5b1fa6;
+        background: color-mix(in srgb, var(--bot-message-color) 80%, var(--accent-color) 20%);
+        color: var(--accent-color);
         transform: translateY(-2px);
         box-shadow: 0 4px 8px rgba(0,0,0,0.1);
     }
@@ -211,7 +220,7 @@
     }
     
     .user-message .visitor-message-content {
-        background: #d1aff3;
+        background: var(--secondary-color);
         color: #000000;
         align-self: flex-end;
         border-radius: 12px 12px 0 12px;
@@ -221,7 +230,7 @@
     }
     
     .bot-message .visitor-message-content {
-        background: #f3f0fa;
+        background: var(--bot-message-color);
         color: #333;
         align-self: flex-start;
         border-radius: 12px 12px 12px 0;
@@ -260,7 +269,7 @@
     }
     
     .visitor-send-btn {
-        background: #5b1fa6;
+        background: var(--primary-color);
         color: #fff;
         border-radius: 8px;
         font-size: 1.25rem;
@@ -276,13 +285,13 @@
     }
     
     .visitor-send-btn:hover {
-        background: #3d136e;
+        background: color-mix(in srgb, var(--primary-color) 80%, black);
         transform: translateY(-2px);
         box-shadow: 0 4px 8px rgba(0,0,0,0.2);
     }
     
     .visitor-footer {
-        background: #5b1fa6;
+        background: var(--primary-color);
         color: #fff;
         font-size: 0.9rem;
         letter-spacing: 1px;
@@ -693,7 +702,7 @@
     
     .mobile-menu-header {
         padding: 1rem;
-        background: #5b1fa6;
+        background: var(--primary-color);
         color: #fff;
     }
     
@@ -712,7 +721,7 @@
     }
     
     .mobile-menu-footer .visitor-info-btn {
-        color: #5b1fa6;
+        color: var(--accent-color);
         display: flex;
         flex-direction: column;
         align-items: center;

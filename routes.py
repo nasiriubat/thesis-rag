@@ -386,6 +386,12 @@ def admin_settings():
                 "contact": request.form.get("contact"),
                 "openai_model": request.form.get("openai_model"),
                 "show_matched_text": request.form.get("show_matched_text", "yes"),
+                "theme_primary_color": request.form.get("theme_primary_color", "#5b1fa6"),
+                "theme_secondary_color": request.form.get("theme_secondary_color", "#d1aff3"),
+                "theme_bot_message_color": request.form.get("theme_bot_message_color", "#f3f0fa"),
+                "theme_background_start": request.form.get("theme_background_start", "#f5f0ff"),
+                "theme_background_end": request.form.get("theme_background_end", "#ede3f7"),
+                "theme_accent_color": request.form.get("theme_accent_color", "#5b1fa6"),
             }
 
             # Handle logo file upload
@@ -419,6 +425,10 @@ def admin_settings():
                 settings_to_update["favicon_file"] = filename
 
             for key, value in settings_to_update.items():
+                # Skip None values to avoid constraint errors
+                if value is None:
+                    continue
+                    
                 setting = Settings.query.filter_by(key=key).first()
                 if setting:
                     setting.value = value
