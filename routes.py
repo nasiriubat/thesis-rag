@@ -1304,14 +1304,15 @@ def api_get_query(id):
     except Exception as e:
         return jsonify({"type": "error", "message": str(e)}), 500
 
-def extract_webpage_text(url, headless=True, wait_time=1):
+def extract_webpage_text(url, headless=True, wait_time=0, enable_javascript=True):
     """
     Extract clean text from webpage using Selenium WebDriver.
     
     Args:
         url (str): The URL to extract text from
         headless (bool): Run browser in headless mode (default: True)
-        wait_time (int): Time to wait for dynamic content to load (default: 3 seconds)
+        wait_time (int): Time to wait for dynamic content to load (default: 5 seconds)
+        enable_javascript (bool): Enable JavaScript for dynamic content (default: True)
     
     Returns:
         str: Extracted clean text content, or None if extraction fails
@@ -1327,7 +1328,7 @@ def extract_webpage_text(url, headless=True, wait_time=1):
             return None
         
         # Extract content using Selenium
-        result = extract_with_selenium(url, headless, wait_time)
+        result = extract_with_selenium(url, headless, wait_time, enable_javascript)
         
         if result:
             return result
@@ -1339,7 +1340,7 @@ def extract_webpage_text(url, headless=True, wait_time=1):
         print(f"Error extracting webpage text: {str(e)}")
         return None
 
-def extract_with_selenium(url, headless=True, wait_time=3):
+def extract_with_selenium(url, headless=True, wait_time=0, enable_javascript=True):
     """
     Extract content using Selenium WebDriver with enhanced features.
     
@@ -1347,6 +1348,7 @@ def extract_with_selenium(url, headless=True, wait_time=3):
         url (str): The URL to extract content from
         headless (bool): Run browser in headless mode
         wait_time (int): Time to wait for dynamic content
+        enable_javascript (bool): Enable JavaScript execution (recommended for modern sites)
     
     Returns:
         str: Clean extracted text content
@@ -1369,7 +1371,11 @@ def extract_with_selenium(url, headless=True, wait_time=3):
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--disable-extensions")
         chrome_options.add_argument("--disable-images")  # Faster loading
-        chrome_options.add_argument("--disable-javascript")  # Disable JS for faster loading (optional)
+        
+        # JavaScript control - disabled only if explicitly requested
+        if not enable_javascript:
+            chrome_options.add_argument("--disable-javascript")
+        
         chrome_options.add_argument("--disable-plugins")
         chrome_options.add_argument("--disable-web-security")
         chrome_options.add_argument("--disable-features=VizDisplayCompositor")
@@ -1397,6 +1403,20 @@ def extract_with_selenium(url, headless=True, wait_time=3):
         # Wait for dynamic content to load
         print(f"⏳ Waiting {wait_time} seconds for dynamic content...")
         time.sleep(wait_time)
+        
+        # Scroll to trigger lazy-loaded content
+        if enable_javascript:
+            try:
+                print("📜 Scrolling page to load all content...")
+                # Scroll down gradually to trigger lazy loading
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
+                time.sleep(0.5)
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(0.5)
+                driver.execute_script("window.scrollTo(0, 0);")  # Scroll back to top
+                time.sleep(0.5)
+            except Exception as e:
+                print(f"⚠️ Scrolling failed (non-critical): {e}")
         
         # Get page source after JavaScript execution
         print("📄 Extracting page content...")
@@ -1440,15 +1460,16 @@ def clean_and_extract_text(html):
             element.decompose()
     
     # Remove elements with specific classes/IDs that are likely unwanted
+    # Note: Be careful with wildcards - avoid matching body/html elements
     unwanted_selectors = [
         '[class*="ad-"]', '[class*="advertisement"]', '[class*="popup"]',
         '[class*="modal"]', '[class*="cookie"]', '[class*="newsletter"]',
-        '[class*="social"]', '[class*="share"]', '[class*="comment"]',
-        '[class*="sidebar"]', '[class*="menu"]', '[class*="nav"]',
+        'div[class*="social"]', 'div[class*="share"]', 'div[class*="comment"]',
+        'aside[class*="sidebar"]', 'div.sidebar',  # More specific sidebar targeting
         '[id*="ad-"]', '[id*="advertisement"]', '[id*="popup"]',
         '[id*="modal"]', '[id*="cookie"]', '[id*="newsletter"]',
-        '[id*="social"]', '[id*="share"]', '[id*="comment"]',
-        '[id*="sidebar"]', '[id*="menu"]', '[id*="nav"]'
+        'div[id*="social"]', 'div[id*="share"]', 'div[id*="comment"]',
+        'aside[id*="sidebar"]', 'div#sidebar'
     ]
     
     for selector in unwanted_selectors:
@@ -1495,6 +1516,40 @@ def find_main_content(soup):
     return main_element
 
 def post_process_text(text):
+    """Clean and format extracted text as plain text"""
+    # Remove excessive whitespace first
+    text = re.sub(r'\s+', ' ', text)
+    text = text.strip()
+    
+    # Remove common unwanted patterns
+    unwanted_patterns = [
+        r'Cookie\s+Policy[^.]*\.',
+        r'Privacy\s+Policy[^.]*\.',
+        r'Terms\s+of\s+Service[^.]*\.',
+        r'Subscribe\s+to\s+our\s+newsletter[^.]*\.',
+        r'Follow\s+us\s+on[^.]*\.',
+        r'Share\s+this\s+article[^.]*\.',
+        r'Advertisement[^.]*\.',
+        r'Sponsored\s+Content[^.]*\.',
+        r'We use cookies.*?(?=\.|\n)',
+        r'By clicking.*?consent.*?(?=\.|\n)',
+        r'Accept All.*?Reject All.*?(?=\.|\n)',
+    ]
+    
+    for pattern in unwanted_patterns:
+        text = re.sub(pattern, '', text, flags=re.IGNORECASE)
+    
+    # Remove excessive whitespace again after pattern removal
+    text = re.sub(r'\s+', ' ', text)
+    text = text.strip()
+    
+    # Only filter if text is very short (likely just title/navigation)
+    # Otherwise return the cleaned text as-is
+    if len(text) > 100:
+        return text
+    else:
+        return text if len(text) > 20 else ""
+
     """Clean and format extracted text as plain text"""
     # Remove excessive whitespace
     text = re.sub(r'\s+', ' ', text)
