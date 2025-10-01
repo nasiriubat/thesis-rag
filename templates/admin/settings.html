@@ -71,6 +71,89 @@
     {% endif %}
     {% endwith %}
 
+    <!-- Theme Customization Card -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Chat Theme Customization</h6>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('main.admin_settings') }}">
+                <div class="row">
+                    <div class="col-lg-4 col-md-6 mb-3">
+                        <label for="theme_primary_color" class="form-label">Primary Color (Navbar, Buttons)</label>
+                        <div class="input-group">
+                            <input type="color" class="form-control form-control-color" id="theme_primary_color" name="theme_primary_color" value="{{ settings.get('theme_primary_color', '#5b1fa6') }}">
+                            <input type="text" class="form-control" id="theme_primary_color_text" value="{{ settings.get('theme_primary_color', '#5b1fa6') }}" readonly>
+                        </div>
+                        <small class="text-muted">Used for navbar, buttons, and primary accents</small>
+                    </div>
+
+                    <div class="col-lg-4 col-md-6 mb-3">
+                        <label for="theme_secondary_color" class="form-label">Secondary Color (User Messages)</label>
+                        <div class="input-group">
+                            <input type="color" class="form-control form-control-color" id="theme_secondary_color" name="theme_secondary_color" value="{{ settings.get('theme_secondary_color', '#d1aff3') }}">
+                            <input type="text" class="form-control" id="theme_secondary_color_text" value="{{ settings.get('theme_secondary_color', '#d1aff3') }}" readonly>
+                        </div>
+                        <small class="text-muted">Used for user message bubbles</small>
+                    </div>
+
+                    <div class="col-lg-4 col-md-6 mb-3">
+                        <label for="theme_bot_message_color" class="form-label">Bot Message Color</label>
+                        <div class="input-group">
+                            <input type="color" class="form-control form-control-color" id="theme_bot_message_color" name="theme_bot_message_color" value="{{ settings.get('theme_bot_message_color', '#f3f0fa') }}">
+                            <input type="text" class="form-control" id="theme_bot_message_color_text" value="{{ settings.get('theme_bot_message_color', '#f3f0fa') }}" readonly>
+                        </div>
+                        <small class="text-muted">Used for bot message bubbles</small>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-lg-4 col-md-6 mb-3">
+                        <label for="theme_background_start" class="form-label">Background Gradient Start</label>
+                        <div class="input-group">
+                            <input type="color" class="form-control form-control-color" id="theme_background_start" name="theme_background_start" value="{{ settings.get('theme_background_start', '#f5f0ff') }}">
+                            <input type="text" class="form-control" id="theme_background_start_text" value="{{ settings.get('theme_background_start', '#f5f0ff') }}" readonly>
+                        </div>
+                        <small class="text-muted">Starting color of background gradient</small>
+                    </div>
+
+                    <div class="col-lg-4 col-md-6 mb-3">
+                        <label for="theme_background_end" class="form-label">Background Gradient End</label>
+                        <div class="input-group">
+                            <input type="color" class="form-control form-control-color" id="theme_background_end" name="theme_background_end" value="{{ settings.get('theme_background_end', '#ede3f7') }}">
+                            <input type="text" class="form-control" id="theme_background_end_text" value="{{ settings.get('theme_background_end', '#ede3f7') }}" readonly>
+                        </div>
+                        <small class="text-muted">Ending color of background gradient</small>
+                    </div>
+
+                    <div class="col-lg-4 col-md-6 mb-3">
+                        <label for="theme_accent_color" class="form-label">Accent Color (Links, Icons)</label>
+                        <div class="input-group">
+                            <input type="color" class="form-control form-control-color" id="theme_accent_color" name="theme_accent_color" value="{{ settings.get('theme_accent_color', '#5b1fa6') }}">
+                            <input type="text" class="form-control" id="theme_accent_color_text" value="{{ settings.get('theme_accent_color', '#5b1fa6') }}" readonly>
+                        </div>
+                        <small class="text-muted">Used for links and accent elements</small>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Preview:</strong> Changes will be applied to the public chat interface after saving. Use the color pickers to customize the theme for your client.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="button" class="btn btn-outline-secondary me-2" onclick="resetToDefaults()">
+                        <i class="fas fa-undo me-2"></i>Reset to Defaults
+                    </button>
+                    <button type="submit" class="btn btn-primary btn-lg">Save Theme Settings</button>
+                </div>
+            </form>
+        </div>
+    </div>
     <div class="card shadow mb-4">
         <div class="card-header py-3">
             <h6 class="m-0 font-weight-bold text-primary">General Settings</h6>
@@ -160,6 +243,7 @@
             </form>
         </div>
     </div>
+
 </div>
 {% endblock %}
 
@@ -209,30 +293,88 @@
         previewImage(this, 'faviconPreview');
     });
 
-    // Handle form submission
-    document.querySelector('form').addEventListener('submit', function (e) {
-        e.preventDefault();
-        const formData = new FormData(this);
+    // Color picker synchronization
+    const colorInputs = [
+        { picker: 'theme_primary_color', text: 'theme_primary_color_text' },
+        { picker: 'theme_secondary_color', text: 'theme_secondary_color_text' },
+        { picker: 'theme_bot_message_color', text: 'theme_bot_message_color_text' },
+        { picker: 'theme_background_start', text: 'theme_background_start_text' },
+        { picker: 'theme_background_end', text: 'theme_background_end_text' },
+        { picker: 'theme_accent_color', text: 'theme_accent_color_text' }
+    ];
 
-        // Get content from CKEditor instances
-        formData.set('about', document.querySelector('#about').value);
-        formData.set('contact', document.querySelector('#contact').value);
-
-        fetch(this.action, {
-            method: 'POST',
-            body: formData
-        }).then(response => response.json())
-            .then(data => {
-                if (data.type === 'success') {
-                    toastr.success(data.message);
-                    setTimeout(() => window.location.reload(), 1000);
-                } else {
-                    toastr.error(data.message);
-                }
-            })
-            .catch(error => {
-                toastr.error('An error occurred while saving settings');
+    colorInputs.forEach(input => {
+        const picker = document.getElementById(input.picker);
+        const text = document.getElementById(input.text);
+        
+        if (picker && text) {
+            picker.addEventListener('input', function() {
+                text.value = this.value.toUpperCase();
             });
+        }
+    });
+
+    // Reset to defaults function
+    window.resetToDefaults = function() {
+        if (confirm('Are you sure you want to reset all theme colors to default values?')) {
+            document.getElementById('theme_primary_color').value = '#5b1fa6';
+            document.getElementById('theme_primary_color_text').value = '#5b1fa6';
+            document.getElementById('theme_secondary_color').value = '#d1aff3';
+            document.getElementById('theme_secondary_color_text').value = '#d1aff3';
+            document.getElementById('theme_bot_message_color').value = '#f3f0fa';
+            document.getElementById('theme_bot_message_color_text').value = '#f3f0fa';
+            document.getElementById('theme_background_start').value = '#f5f0ff';
+            document.getElementById('theme_background_start_text').value = '#f5f0ff';
+            document.getElementById('theme_background_end').value = '#ede3f7';
+            document.getElementById('theme_background_end_text').value = '#ede3f7';
+            document.getElementById('theme_accent_color').value = '#5b1fa6';
+            document.getElementById('theme_accent_color_text').value = '#5b1fa6';
+            toastr.info('Theme colors reset to defaults. Click "Save Theme Settings" to apply changes.');
+        }
+    };
+
+    // Handle form submissions
+    document.querySelectorAll('form').forEach(form => {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const formData = new FormData(this);
+
+            // Get content from CKEditor instances if they exist
+            const aboutEditor = document.querySelector('#about');
+            const contactEditor = document.querySelector('#contact');
+            if (aboutEditor) {
+                formData.set('about', aboutEditor.value);
+            }
+            if (contactEditor) {
+                formData.set('contact', contactEditor.value);
+            }
+
+            // Show loading state
+            const submitButton = this.querySelector('button[type="submit"]');
+            const originalText = submitButton.innerHTML;
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+            fetch(this.action, {
+                method: 'POST',
+                body: formData
+            }).then(response => response.json())
+                .then(data => {
+                    if (data.type === 'success') {
+                        toastr.success(data.message);
+                        setTimeout(() => window.location.reload(), 1500);
+                    } else {
+                        toastr.error(data.message);
+                        submitButton.disabled = false;
+                        submitButton.innerHTML = originalText;
+                    }
+                })
+                .catch(error => {
+                    toastr.error('An error occurred while saving settings');
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = originalText;
+                });
+        });
     });
 </script>
 {% endblock %}
