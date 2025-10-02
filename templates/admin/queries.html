@@ -261,7 +261,7 @@ function bulkDeleteQueries() {
         
         // Delete each query
         Promise.all(selectedIds.map(id => 
-            fetch(`/api/query/${id}`, {
+            fetch('{{ url_for("main.api_delete_query", id=0) }}'.replace(0, id), {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' }
             })
@@ -290,7 +290,7 @@ function bulkDeleteQueries() {
 function addToFAQ(queryId, useExisting) {
     currentQueryId = queryId;
     
-    fetch(`/api/query/${queryId}`)
+    fetch('{{ url_for("main.api_get_query", id=0) }}'.replace(0, queryId))
         .then(response => response.json())
         .then(data => {
             if (data.type === 'success') {
@@ -319,7 +319,7 @@ function submitFAQ() {
     const question = document.getElementById('faqQuestion').value;
     const answer = document.getElementById('faqAnswer').value;
     
-    fetch('/api/faq', {
+    fetch('{{ url_for("main.api_create_faq") }}', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -364,7 +364,7 @@ function deleteAllQueries() {
             deleteButton.disabled = true;
             deleteButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting All...';
             
-            fetch('/api/queries/bulk-delete', {
+            fetch('{{ url_for("main.api_bulk_delete_queries") }}', {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' }
             })

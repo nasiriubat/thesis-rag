@@ -624,7 +624,7 @@
             
             // Delete each file
             Promise.all(selectedIds.map(id => 
-                fetch(`/api/file/${id}`, {
+                fetch('{{ url_for("main.api_delete_file", id=0) }}'.replace('0', id), {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' }
                 })
@@ -659,7 +659,7 @@
                 deleteButton.disabled = true;
                 deleteButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting All...';
                 
-                fetch('/api/file/bulk-delete', {
+                fetch('{{ url_for("main.api_bulk_delete_files") }}', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' }
                 })
@@ -719,7 +719,7 @@
         // Delete file function
         window.deleteFile = function (id) {
             if (confirm('Are you sure you want to delete this file?')) {
-                fetch(`/api/file/${id}`, {
+                fetch('{{ url_for("main.api_delete_file", id=0) }}'.replace('0', id), {
                     method: 'DELETE',
                     headers: {
                         'Content-Type': 'application/json'
@@ -1008,7 +1008,7 @@
                 });
             }, 200);
 
-            fetch('/api/file', {
+            fetch('{{ url_for("main.api_upload_file") }}', {
                     method: 'POST',
                     body: formData
                 })
@@ -1121,7 +1121,7 @@
                 updateUrlStatus(url, 'uploading', Math.min(progress, 90));
             }, 300);
 
-            fetch('/api/file', {
+            fetch('{{ url_for("main.api_upload_file") }}', {
                 method: 'POST',
                 body: formData
             })
@@ -1195,7 +1195,7 @@
             const originalButtonText = saveBtn.innerHTML;
             saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Uploading...';
 
-            fetch('/api/file', {
+            fetch('{{ url_for("main.api_upload_file") }}', {
                 method: 'POST',
                 body: formData
             })

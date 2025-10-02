@@ -1039,7 +1039,7 @@ function askQuestion(question) {
     const loadingId = addMessage(getTranslation('thinking', currentLanguage), 'bot', true);
     
     // Send request to server with language
-    fetch('/api/chat', {
+    fetch('{{ url_for("main.chat") }}', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -1159,7 +1159,7 @@ function submitFeedback(messageId, feedback, text) {
     }
     
     // Send feedback to server
-    fetch(`/api/chat/${queryId}/feedback`, {
+    fetch('{{ url_for("main.chat_feedback", query_id=0) }}'.replace(0, queryId), {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
