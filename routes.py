@@ -214,6 +214,7 @@ def chat():
         )
 
         answer = response.choices[0].message.content
+        used_file_names = []  # For PDF generation - just clean file names
         if used_files:
             files_list = []
             for f in used_files:
@@ -227,6 +228,7 @@ def chat():
                         parts = parsed.path.strip("/").split("/")
                         display += f"/{parts[0]}"
                     html = f"- <a href='{fname}' target='_blank'>{display}</a>"
+                    used_file_names.append(fname)
                     if show_matched_text == "yes":
                         html += (
                             f"<details><summary style='cursor:pointer; color:gray;'>View Original Text</summary>"
@@ -235,6 +237,7 @@ def chat():
                     files_list.append(html)
                 else:
                     html = f"- {fname}"
+                    used_file_names.append(fname)
                     if show_matched_text == "yes":
                         html += (
                             f"<details><summary style='cursor:pointer; color:gray;'>View Original Text</summary>"
@@ -247,8 +250,8 @@ def chat():
 
         # 6. Save query with the generated answer
         query = save_query(answer=answer)
-
-        return jsonify({"answer": answer,"sources_used":sources_used, "type": "success", "query_id": query.id})
+        # PRINT clean_file_names
+        return jsonify({"answer": answer,"sources_used":sources_used, "used_file_names":used_file_names, "type": "success", "query_id": query.id})
 
     except Exception as e:
         print(f"Error in chat route: {str(e)}")

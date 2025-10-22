@@ -511,6 +511,44 @@
         transform: translateY(-2px);
     }
     
+    /* Download Chat Button Styling */
+    .download-chat-btn {
+        background: var(--primary-color);
+        color: #fff;
+        border: 1px solid var(--primary-color);
+        border-radius: 6px;
+        padding: 0.4rem 0.8rem;
+        font-size: 0.85rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+    
+    .download-chat-btn:hover {
+        background: color-mix(in srgb, var(--primary-color) 80%, black);
+        color: #fff;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    
+    .download-chat-btn:active {
+        transform: translateY(0);
+    }
+    
+    .chat-controls {
+        padding: 0.5rem 0;
+        border-top: 1px solid #e0d3f7;
+        margin-top: 0.5rem;
+    }
+    
+    .chat-info {
+        color: #666;
+        font-size: 0.8rem;
+    }
+
     /* Language toggle improvements */
     .language-toggle {
         position: relative;
@@ -982,6 +1020,13 @@
                         <input type="hidden" id="message_history" value="{{ settings.get('message_history', 10) }}">
                         <input type="text" id="question" class="form-control visitor-chat-input" data-translate-placeholder="typeMessage" placeholder="Type your message here..." autocomplete="off">
                         <button type="submit" class="btn visitor-send-btn ms-2"><i class="fas fa-paper-plane"></i></button>
+                        <button id="downloadChatBtn" type="button"
+        class="btn visitor-send-btn bg-primary ms-2"
+        style="display: none;"
+        onclick="downloadChatAsPDF()">
+    <i class="fas fa-download"></i>
+</button>
+
                     </form>
                 </div>
             </div>
@@ -998,6 +1043,8 @@
 {% block extra_js %}
 <!-- Add language.js before other scripts -->
 <script src="{{ url_for('static', filename='js/languages.js') }}"></script>
+<!-- jsPDF library for PDF generation -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 if (performance.navigation.type === performance.navigation.TYPE_RELOAD) {
     // page is reloaded - clear history
@@ -1030,6 +1077,12 @@ function askQuestion(question) {
     const initialFaqs = document.getElementById('initialFaqs');
     if (initialFaqs && initialFaqs.style.display !== 'none') {
         initialFaqs.style.display = 'none';
+    }
+    
+    // Show download button when chat starts
+    const downloadBtn = document.getElementById('downloadChatBtn');
+    if (downloadBtn) {
+        downloadBtn.style.display = 'flex';
     }
     
     // Add user message to chat immediately
@@ -1073,11 +1126,34 @@ function askQuestion(question) {
         }
         
         // Add sources if available
+        const usedFileNames = data.used_file_names;
         if (data.sources && data.sources.length > 0) {
             const sourcesHtml = data.sources.map(source =>
                 `<div class='source-item'><small class='text-muted'>${getTranslation('source', currentLanguage)} ${source.text}</small></div>`
             ).join('');
             addMessage(`<div class='sources'>${sourcesHtml}</div>`, 'bot');
+        }
+        
+        // Store used file names for PDF generation
+        console.log('API Response used_file_names:', usedFileNames); // Debug log
+        if (usedFileNames && usedFileNames.length > 0) {
+            // Find the message element that was just created
+            let messageElement = document.getElementById(messageId);
+            if (!messageElement) {
+                // Fallback: find the most recent bot message
+                const botMessages = document.querySelectorAll('.bot-message');
+                messageElement = botMessages[botMessages.length - 1];
+                console.log('Using fallback message element:', messageElement); // Debug log
+            }
+            
+            if (messageElement) {
+                messageElement.setAttribute('data-used-files', JSON.stringify(usedFileNames));
+                console.log('Stored used files on element:', messageElement.id, usedFileNames); // Debug log
+            } else {
+                console.log('No message element found for storing files'); // Debug log
+            }
+        } else {
+            console.log('No used files data found in API response:', usedFileNames); // Debug log
         }
         
         // Show notifications if needed
@@ -1277,6 +1353,321 @@ function addToHistory(role, content) {
 function getRecentHistory(n = 10) {
     let history = JSON.parse(sessionStorage.getItem('chatHistory') || '[]');
     return history.slice(-n); // last N messages
+}
+
+// Helper function to ensure text fits within PDF width
+function ensureTextFits(doc, text, maxWidth, margin) {
+    const textWidth = doc.getTextWidth(text);
+    if (textWidth > maxWidth) {
+        // Split text to fit
+        return doc.splitTextToSize(text, maxWidth);
+    }
+    return [text];
+}
+
+// Function to convert HTML to plain text with proper line breaks and formatting
+function convertHtmlToText(html) {
+    // Create a temporary div to parse HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    
+    // Handle <br> tags by replacing with newlines
+    const brElements = tempDiv.querySelectorAll('br');
+    brElements.forEach(br => {
+        br.replaceWith('\n');
+    });
+    
+    // Handle <b> and <strong> tags - we'll process these specially
+    const boldElements = tempDiv.querySelectorAll('b, strong');
+    boldElements.forEach(bold => {
+        bold.replaceWith(`**${bold.textContent}**`);
+    });
+    
+    // Remove <details> and <summary> tags completely (for "Show matched text")
+    // We don't want any of this content in the PDF
+    const detailsElements = tempDiv.querySelectorAll('details');
+    detailsElements.forEach(details => {
+        details.remove(); // Completely remove the details section
+    });
+    
+    // Skip <pre> tags (matched text content) - we only want file names
+    const preElements = tempDiv.querySelectorAll('pre');
+    preElements.forEach(pre => {
+        pre.remove(); // Remove the pre content entirely
+    });
+    
+    // Remove only the HTML elements that contain source information, not the text content
+    const sourcesUsedElements = tempDiv.querySelectorAll('*');
+    sourcesUsedElements.forEach(element => {
+        if (element.textContent && (
+            element.textContent.includes('View Original Text') ||
+            (element.textContent.includes('https://') && element.textContent.includes('View Original Text'))
+        )) {
+            element.remove();
+        }
+    });
+    
+    // Clean up the text content by removing source sections
+    const allText = tempDiv.textContent || '';
+    if (allText.includes('Sources used:')) {
+        // Split by "Sources used:" and keep only the first part
+        const parts = allText.split('Sources used:');
+        if (parts.length > 0) {
+            tempDiv.textContent = parts[0].trim();
+        }
+    }
+    
+    // Handle <a> tags - show URL and text
+    const linkElements = tempDiv.querySelectorAll('a');
+    linkElements.forEach(link => {
+        const href = link.getAttribute('href') || '';
+        const text = link.textContent;
+        link.replaceWith(`${text} (${href})`);
+    });
+    
+    // Handle <p> tags with proper spacing
+    const pElements = tempDiv.querySelectorAll('p');
+    pElements.forEach(p => {
+        p.replaceWith(p.textContent + '\n\n');
+    });
+    
+    // Handle <div> tags
+    const divElements = tempDiv.querySelectorAll('div');
+    divElements.forEach(div => {
+        if (div.textContent.trim()) {
+            div.replaceWith(div.textContent + '\n');
+        }
+    });
+    
+    // Get the final text
+    let text = tempDiv.textContent || tempDiv.innerText || '';
+    
+    // Clean up formatting
+    text = text.replace(/\s+/g, ' '); // Replace multiple spaces with single space
+    text = text.replace(/\n\s+/g, '\n'); // Remove spaces after newlines
+    text = text.replace(/\s+\n/g, '\n'); // Remove spaces before newlines
+    text = text.replace(/\n{3,}/g, '\n\n'); // Replace multiple newlines with double newlines
+    
+    return text.trim();
+}
+
+// Function to download chat as PDF
+function downloadChatAsPDF() {
+    try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        // Get current date and time
+        const now = new Date();
+        const dateStr = now.toLocaleDateString();
+        const timeStr = now.toLocaleTimeString();
+        
+        // Get app name from settings or use default
+        const appName = '{{ settings.get("logo", "Guide GPT") }}';
+        
+        // Set up PDF content
+        let yPosition = 20;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 20;
+        const maxWidth = doc.internal.pageSize.width - (margin * 2) - 10; // Extra 10px for safety
+        
+        // Add header
+        doc.setFontSize(18);
+        doc.setFont(undefined, 'bold');
+        doc.text(appName + ' - Chat History', margin, yPosition);
+        yPosition += 10;
+        
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'normal');
+        doc.text(`Generated on: ${dateStr} at ${timeStr}`, margin, yPosition);
+        yPosition += 15;
+        
+        // Add separator line
+        doc.setLineWidth(0.5);
+        doc.line(margin, yPosition, doc.internal.pageSize.width - margin, yPosition);
+        yPosition += 10;
+        
+        // Get chat messages from the DOM
+        const chatMessages = document.getElementById('chatMessages');
+        const messages = chatMessages.querySelectorAll('.visitor-message');
+        
+        if (messages.length === 0) {
+            doc.setFontSize(12);
+            doc.text('No chat messages found.', margin, yPosition);
+        } else {
+            // Process messages in reverse order (since they're displayed in reverse)
+            const messagesArray = Array.from(messages).reverse();
+            
+            messagesArray.forEach((messageElement, index) => {
+                // Check if we need a new page
+                if (yPosition > pageHeight - 50) {
+                    doc.addPage();
+                    yPosition = 20;
+                }
+                
+                const isUserMessage = messageElement.classList.contains('user-message');
+                const messageContent = messageElement.querySelector('.visitor-message-content');
+                
+                if (messageContent) {
+                    // Get HTML content and convert to plain text with proper line breaks
+                    const htmlContent = messageContent.innerHTML;
+                    const cleanText = convertHtmlToText(htmlContent);
+                    
+                    if (cleanText) {
+                        // Add sender label
+                        doc.setFontSize(10);
+                        doc.setFont(undefined, 'bold');
+                        const sender = isUserMessage ? 'You' : 'Assistant';
+                        doc.text(sender + ':', margin, yPosition);
+                        yPosition += 6;
+                        
+                        // Add message content
+                        doc.setFontSize(9);
+                        doc.setFont(undefined, 'normal');
+                        
+                        // Split text by line breaks and process each line
+                        const textLines = cleanText.split('\n');
+                        textLines.forEach(line => {
+                            if (line.trim()) {
+                                // Check if line contains bold markers (**text**)
+                                if (line.includes('**')) {
+                                    // Process bold text with proper wrapping
+                                    const parts = line.split(/(\*\*.*?\*\*)/g);
+                                    let currentLine = '';
+                                    
+                                    parts.forEach(part => {
+                                        if (part.startsWith('**') && part.endsWith('**')) {
+                                            // Bold text - add to current line
+                                            currentLine += part;
+                                        } else if (part.trim()) {
+                                            // Regular text - add to current line
+                                            currentLine += part;
+                                        }
+                                    });
+                                    
+                                    // Now wrap the complete line properly
+                                    const wrappedLines = doc.splitTextToSize(currentLine, maxWidth);
+                                    wrappedLines.forEach(wrappedLine => {
+                                        // Process each wrapped line for bold formatting
+                                        if (wrappedLine.includes('**')) {
+                                            const lineParts = wrappedLine.split(/(\*\*.*?\*\*)/g);
+                                            let currentX = margin + 5;
+                                            
+                                            lineParts.forEach(linePart => {
+                                                if (linePart.startsWith('**') && linePart.endsWith('**')) {
+                                                    // Bold text
+                                                    const boldText = linePart.slice(2, -2);
+                                                    doc.setFont(undefined, 'bold');
+                                                    const boldWidth = doc.getTextWidth(boldText);
+                                                    
+                                                    // Check if we need a new line
+                                                    if (currentX + boldWidth > doc.internal.pageSize.width - margin - 10) {
+                                                        yPosition += 4;
+                                                        currentX = margin + 5;
+                                                    }
+                                                    
+                                                    doc.text(boldText, currentX, yPosition);
+                                                    currentX += boldWidth;
+                                                    doc.setFont(undefined, 'normal');
+                                                } else if (linePart.trim()) {
+                                                    // Regular text
+                                                    const textWidth = doc.getTextWidth(linePart);
+                                                    
+                                                    // Check if we need a new line
+                                                    if (currentX + textWidth > doc.internal.pageSize.width - margin - 10) {
+                                                        yPosition += 4;
+                                                        currentX = margin + 5;
+                                                    }
+                                                    
+                                                    doc.text(linePart, currentX, yPosition);
+                                                    currentX += textWidth;
+                                                }
+                                            });
+                                            yPosition += 4;
+                                        } else {
+                                            // Regular wrapped line
+                                            doc.text(wrappedLine, margin + 5, yPosition);
+                                            yPosition += 4;
+                                        }
+                                    });
+                                } else {
+                                    // Regular line - ensure it fits and split if needed
+                                    const wrappedLines = ensureTextFits(doc, line.trim(), maxWidth, margin);
+                                    doc.text(wrappedLines, margin + 5, yPosition);
+                                    yPosition += (wrappedLines.length * 4);
+                                }
+                            } else {
+                                // Empty line - add some spacing
+                                yPosition += 4;
+                            }
+                        });
+                        
+                        // Add used file names if available (for bot messages)
+                        if (!isUserMessage) {
+                            const usedFilesData = messageElement.getAttribute('data-used-files');
+                            if (usedFilesData) {
+                                try {
+                                    const usedFiles = JSON.parse(usedFilesData);
+                                    if (usedFiles && usedFiles.length > 0) {
+                                        yPosition += 4;
+                                        
+                                        // Add comma-separated source names in bold
+                                        const sourcesText = usedFiles.join(', ');
+                                        doc.setFontSize(9);
+                                        doc.setFont(undefined, 'bold');
+                                        const wrappedLines = ensureTextFits(doc, sourcesText, maxWidth, margin);
+                                        doc.text(wrappedLines, margin + 5, yPosition);
+                                        yPosition += (wrappedLines.length * 4) + 4;
+                                    }
+                                } catch (e) {
+                                    console.log('Error parsing used files data:', e);
+                                }
+                            }
+                        }
+                        
+                        yPosition += 8;
+                        
+                        // Add separator between messages
+                        if (index < messagesArray.length - 1) {
+                            doc.setLineWidth(0.2);
+                            doc.setDrawColor(200, 200, 200);
+                            doc.line(margin, yPosition, doc.internal.pageSize.width - margin, yPosition);
+                            yPosition += 5;
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Add footer
+        const totalPages = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setFont(undefined, 'italic');
+            doc.text(`Page ${i} of ${totalPages}`, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 10);
+        }
+        
+        // Generate filename with timestamp
+        const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-');
+        const filename = `${appName.replace(/\s+/g, '_')}_Chat_${timestamp}.pdf`;
+        
+        // Download the PDF
+        doc.save(filename);
+        
+        // Show success message
+        if (typeof toastr !== 'undefined') {
+            toastr.success(getTranslation('chatDownloaded', currentLanguage) || 'Chat downloaded successfully!');
+        }
+        
+    } catch (error) {
+        console.error('Error generating PDF:', error);
+        if (typeof toastr !== 'undefined') {
+            toastr.error(getTranslation('downloadError', currentLanguage) || 'Error downloading chat. Please try again.');
+        } else {
+            alert('Error downloading chat. Please try again.');
+        }
+    }
 }
 </script>
 
