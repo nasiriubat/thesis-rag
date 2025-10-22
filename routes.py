@@ -148,8 +148,12 @@ def chat():
 
         if not file_ids:
             return handle_no_content(question, language)
-
-        results = search_across_indices(question, file_ids, top_k=3)
+        # get chunk number from settings
+        chunk_number = Settings.query.filter_by(key="chunk_number").first()
+        chunk_number = chunk_number.value if chunk_number and chunk_number.value else 3
+        # make it int
+        chunk_number = int(chunk_number)
+        results = search_across_indices(question, file_ids, top_k=chunk_number)
         if not results and not history_text:
             # Save query with answer_found=False and return no content message
             message = {
@@ -239,12 +243,12 @@ def chat():
                     files_list.append(html)
 
             files_html = "<br>".join(files_list)
-            answer = f"{answer}<br><br><b>Sources used:</b><br>{files_html}"
+            sources_used = f"<br><br><b>Sources used:</b><br>{files_html}"
 
         # 6. Save query with the generated answer
         query = save_query(answer=answer)
 
-        return jsonify({"answer": answer, "type": "success", "query_id": query.id})
+        return jsonify({"answer": answer,"sources_used":sources_used, "type": "success", "query_id": query.id})
 
     except Exception as e:
         print(f"Error in chat route: {str(e)}")
@@ -380,6 +384,7 @@ def admin_settings():
 
             settings_to_update = {
                 "logo": request.form.get("logo"),
+                "chunk_number": request.form.get("chunk_number"),
                 "openai_key": request.form.get("openai_key"),
                 "copyright": request.form.get("copyright"),
                 "about": request.form.get("about"),
@@ -392,6 +397,7 @@ def admin_settings():
                 "theme_background_start": request.form.get("theme_background_start", "#f5f0ff"),
                 "theme_background_end": request.form.get("theme_background_end", "#ede3f7"),
                 "theme_accent_color": request.form.get("theme_accent_color", "#5b1fa6"),
+                "message_history": request.form.get("message_history", 10),
             }
 
             # Handle logo file upload
@@ -810,9 +816,9 @@ def check_duplicate_url(url):
 def api_upload_file():
     try:
         upload_type = request.form.get("uploadType")
-        print("Upload Type:", upload_type)
-        print("Request form data:", request.form)
-        print("Request files:", request.files)
+        # print("Upload Type:", upload_type)
+        # print("Request form data:", request.form)
+        # print("Request files:", request.files)
 
         if upload_type == "file":
             files = request.files.getlist("file")
@@ -899,7 +905,7 @@ def api_upload_file():
                     400,
                 )
 
-            print(f"Processing URL: {url}")
+            # print(f"Processing URL: {url}")
             text = extract_text_from_file(url)
             if not text:
                 return (
@@ -990,7 +996,7 @@ def delete_associated_files(file_identifier):
         for file_path in file_paths.values():
             if os.path.exists(file_path):
                 os.remove(file_path)
-                print(f"Deleted associated file: {file_path}")
+                # print(f"Deleted associated file: {file_path}")
     except Exception as e:
         print(f"Error deleting associated files: {str(e)}")
 
@@ -1021,12 +1027,12 @@ def api_manage_faq(faq_id):
 
             except Exception as e:
                 db.session.rollback()
-                print(f"Error generating embeddings: {e}")
+                # print(f"Error generating embeddings: {e}")
                 return jsonify({"error": str(e)}), 500
 
     except Exception as e:
         db.session.rollback()
-        print(f"Error managing FAQ: {e}")
+        # print(f"Error managing FAQ: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -1190,7 +1196,7 @@ def api_delete_all_queries():
         return jsonify({"message": "All queries deleted successfully"})
     except Exception as e:
         db.session.rollback()
-        print(f"Error deleting all queries: {e}")
+        # print(f"Error deleting all queries: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -1231,7 +1237,7 @@ def regenerate_missing_embeddings():
             file_identifier = generate_and_store_embeddings(file.text)
             if file_identifier:
                 file.file_identifier = file_identifier
-                print(f"Regenerated embedding for file {file.id}")
+                # print(f"Regenerated embedding for file {file.id}")
 
         # Check FAQs
         faqs = FAQ.query.filter_by(embedding=None).all()
@@ -1240,7 +1246,7 @@ def regenerate_missing_embeddings():
             file_identifier = generate_and_store_embeddings(combined_text)
             if file_identifier:
                 faq.embedding = json.dumps(file_identifier)
-                print(f"Regenerated embedding for FAQ {faq.id}")
+                # print(f"Regenerated embedding for FAQ {faq.id}")
 
         db.session.commit()
         return True

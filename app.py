@@ -57,7 +57,7 @@ def create_app(config_name='default'):
 if __name__ == '__main__':
     port=int(os.getenv('PORT', 4001))
     basepath=os.getenv('BASEPATH', "/")
-    app = create_app('production')
+    app = create_app(os.getenv('FLASK_ENV', 'production'))
 
     application = DispatcherMiddleware(Flask('dummy'), {
         basepath: app
