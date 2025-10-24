@@ -12,7 +12,7 @@ git pull origin main
 source venv/bin/activate
 # pip install -r requirements.txt
 # flask db upgrade
-pm2 restart poricity
+pm2 restart terhi-bot
 
 
 
