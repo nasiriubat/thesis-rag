@@ -332,6 +332,40 @@
             </div>
         </div>
         <div class="card-body">
+            <!-- Search and Controls -->
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" class="form-control" id="searchInput" placeholder="Search files...">
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <select class="form-select" id="perPageSelect">
+                        <option value="10">10 per page</option>
+                        <option value="25">25 per page</option>
+                        <option value="50">50 per page</option>
+                        <option value="100">100 per page</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <div class="d-flex justify-content-end">
+                        <button class="btn btn-outline-secondary" id="refreshBtn" title="Refresh">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading Spinner -->
+            <div id="loadingSpinner" class="text-center py-4" style="display: none;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2 text-muted">Loading files...</p>
+            </div>
+
+            <!-- Table -->
             <div class="table-responsive">
                 <table id="filesTable" class="table table-bordered table-striped">
                     <thead>
@@ -347,45 +381,22 @@
                             <th width="10%">Actions</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {% for file in files %}
-                        <tr data-file-id="{{ file.id }}" data-filename="{{ file.original_filename }}" data-content="{{ file.text|replace('"', '&quot;')|replace('\n', '\\n') }}">
-                            <td>
-                                <input type="checkbox" class="form-check-input file-checkbox" value="{{ file.id }}">
-                            </td>
-                            <td>{{ loop.index }}</td>
-                            <td>
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <span class="text-truncate me-2" style="max-width: 200px;" title="{{ file.original_filename }}">{{ file.original_filename }}</span>
-                                    <button class="btn btn-sm btn-outline-primary"
-                                        onclick="copyToClipboard('{{ file.original_filename }}')" title="Copy filename">
-                                        <i class="fas fa-copy"></i>
-                                    </button>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="text-truncate d-block" style="max-width: 300px;" title="{{ file.text[:200] }}">
-                                    {{ file.text[:100] }}{% if file.text|length > 100 %}...{% endif %}
-                                </span>
-                            </td>
-                            <td>{{ file.user.name }}</td>
-                            <td>{{ file.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
-                            <td>
-                                <div class="btn-group" role="group">
-                                    <button class="btn btn-info btn-sm" onclick="viewFileById('{{ file.id }}')"
-                                        title="View file">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button class="btn btn-danger btn-sm" onclick="deleteFile('{{ file.id }}')"
-                                        title="Delete file">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
+                    <tbody id="filesTableBody">
+                        <!-- Data will be loaded via AJAX -->
                     </tbody>
                 </table>
+            </div>
+
+            <!-- Pagination Controls -->
+            <div class="pagination-controls mt-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <span id="paginationInfo" class="text-muted">No data loaded</span>
+                    </div>
+                    <div id="paginationButtons">
+                        <!-- Pagination buttons will be generated here -->
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -524,53 +535,288 @@
 
 {% block extra_js %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
-<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.datatables.net/select/1.7.0/js/dataTables.select.min.js"></script>
 <script>
-    let filesTable;
+    // Pagination state
+    let currentPage = 1;
+    let perPage = 10;
+    let searchQuery = '';
+    let orderBy = 'id';
+    let orderDir = 'desc';
+    let selectedFiles = new Set();
+    let totalFiles = 0;
+    let totalPages = 0;
 
-    // Initialize DataTable
-    $(document).ready(function() {
-        filesTable = $('#filesTable').DataTable({
-            "pageLength": 10,
-            "lengthMenu": [[5, 10, 25, 50, -1], [5, 10, 25, 50, "All"]],
-            "order": [[1, "desc"]],
-            "columnDefs": [
-                { "orderable": false, "targets": [0, 6] }, // Disable sorting on checkbox and actions columns
-                { "searchable": false, "targets": [0, 6] } // Disable search on checkbox and actions columns
-            ],
-            "language": {
-                "search": "Search Files:",
-                "lengthMenu": "Show _MENU_ files per page",
-                "info": "Showing _START_ to _END_ of _TOTAL_ files",
-                "infoEmpty": "No files found",
-                "infoFiltered": "(filtered from _MAX_ total files)",
-                "paginate": {
-                    "first": "First",
-                    "last": "Last",
-                    "next": "Next",
-                    "previous": "Previous"
-                }
-            }
+    // Load files data via AJAX
+    function loadFiles() {
+        showLoading(true);
+        
+        const params = new URLSearchParams({
+            page: currentPage,
+            per_page: perPage,
+            search: searchQuery,
+            order_by: orderBy,
+            order_dir: orderDir
         });
 
+        fetch(`{{ url_for('main.api_files_paginated') }}?${params}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    toastr.error('Error loading files: ' + data.error);
+                    return;
+                }
+                
+                totalFiles = data.total;
+                totalPages = data.pages;
+                
+                renderFilesTable(data.data);
+                renderPagination();
+                updatePaginationInfo();
+                showLoading(false);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                toastr.error('Failed to load files');
+                showLoading(false);
+            });
+    }
+
+    // Render files table
+    function renderFilesTable(files) {
+        const tbody = document.getElementById('filesTableBody');
+        tbody.innerHTML = '';
+
+        if (files.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="text-center text-muted py-4">
+                        <i class="fas fa-folder-open fa-2x mb-2"></i><br>
+                        No files found
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        files.forEach((file, index) => {
+            const row = document.createElement('tr');
+            row.setAttribute('data-file-id', file.id);
+            row.setAttribute('data-filename', file.original_filename);
+            row.setAttribute('data-content', file.text.replace(/"/g, '&quot;').replace(/\n/g, '\\n'));
+            
+            const isSelected = selectedFiles.has(file.id);
+            
+            row.innerHTML = `
+                <td>
+                    <input type="checkbox" class="form-check-input file-checkbox" value="${file.id}" ${isSelected ? 'checked' : ''}>
+                </td>
+                <td>${(currentPage - 1) * perPage + index + 1}</td>
+                <td>
+                    <div class="d-flex align-items-center justify-content-between">
+                        <span class="text-truncate me-2" style="max-width: 200px;" title="${file.original_filename}">${file.original_filename}</span>
+                        <button class="btn btn-sm btn-outline-primary" onclick="copyToClipboard('${file.original_filename}')" title="Copy filename">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </td>
+                <td>
+                    <span class="text-truncate d-block" style="max-width: 300px;" title="${file.text}">
+                        ${file.text}
+                    </span>
+                </td>
+                <td>${file.user_name}</td>
+                <td>${file.created_at}</td>
+                <td>
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-info btn-sm" onclick="viewFileById('${file.id}')" title="View file">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteFile('${file.id}')" title="Delete file">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            `;
+            
+            tbody.appendChild(row);
+        });
+
+        // Re-attach event listeners
+        attachEventListeners();
+    }
+
+    // Render pagination buttons
+    function renderPagination() {
+        const container = document.getElementById('paginationButtons');
+        container.innerHTML = '';
+
+        if (totalPages <= 1) return;
+
+        // Previous button
+        const prevBtn = document.createElement('button');
+        prevBtn.className = `btn btn-outline-secondary btn-sm me-1 ${currentPage === 1 ? 'disabled' : ''}`;
+        prevBtn.innerHTML = '<i class="fas fa-chevron-left"></i>';
+        prevBtn.disabled = currentPage === 1;
+        prevBtn.onclick = () => goToPage(currentPage - 1);
+        container.appendChild(prevBtn);
+
+        // Page numbers
+        const startPage = Math.max(1, currentPage - 2);
+        const endPage = Math.min(totalPages, currentPage + 2);
+
+        if (startPage > 1) {
+            const firstBtn = document.createElement('button');
+            firstBtn.className = 'btn btn-outline-secondary btn-sm me-1';
+            firstBtn.textContent = '1';
+            firstBtn.onclick = () => goToPage(1);
+            container.appendChild(firstBtn);
+
+            if (startPage > 2) {
+                const ellipsis = document.createElement('span');
+                ellipsis.className = 'btn btn-outline-secondary btn-sm me-1 disabled';
+                ellipsis.textContent = '...';
+                container.appendChild(ellipsis);
+            }
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            const pageBtn = document.createElement('button');
+            pageBtn.className = `btn btn-sm me-1 ${i === currentPage ? 'btn-primary' : 'btn-outline-secondary'}`;
+            pageBtn.textContent = i;
+            pageBtn.onclick = () => goToPage(i);
+            container.appendChild(pageBtn);
+        }
+
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                const ellipsis = document.createElement('span');
+                ellipsis.className = 'btn btn-outline-secondary btn-sm me-1 disabled';
+                ellipsis.textContent = '...';
+                container.appendChild(ellipsis);
+            }
+
+            const lastBtn = document.createElement('button');
+            lastBtn.className = 'btn btn-outline-secondary btn-sm me-1';
+            lastBtn.textContent = totalPages;
+            lastBtn.onclick = () => goToPage(totalPages);
+            container.appendChild(lastBtn);
+        }
+
+        // Next button
+        const nextBtn = document.createElement('button');
+        nextBtn.className = `btn btn-outline-secondary btn-sm ${currentPage === totalPages ? 'disabled' : ''}`;
+        nextBtn.innerHTML = '<i class="fas fa-chevron-right"></i>';
+        nextBtn.disabled = currentPage === totalPages;
+        nextBtn.onclick = () => goToPage(currentPage + 1);
+        container.appendChild(nextBtn);
+    }
+
+    // Update pagination info
+    function updatePaginationInfo() {
+        const start = (currentPage - 1) * perPage + 1;
+        const end = Math.min(currentPage * perPage, totalFiles);
+        document.getElementById('paginationInfo').textContent = `Showing ${start}-${end} of ${totalFiles} files`;
+    }
+
+    // Go to specific page
+    function goToPage(page) {
+        if (page < 1 || page > totalPages || page === currentPage) return;
+        currentPage = page;
+        loadFiles();
+    }
+
+    // Show/hide loading spinner
+    function showLoading(show) {
+        const spinner = document.getElementById('loadingSpinner');
+        const table = document.querySelector('.table-responsive');
+        
+        if (show) {
+            spinner.style.display = 'block';
+            table.style.opacity = '0.5';
+        } else {
+            spinner.style.display = 'none';
+            table.style.opacity = '1';
+        }
+    }
+
+    // Attach event listeners
+    function attachEventListeners() {
         // Handle select all checkbox
-        $('#selectAll').on('change', function() {
+        $('#selectAll').off('change').on('change', function() {
             const isChecked = this.checked;
             $('.file-checkbox').prop('checked', isChecked);
+            
+            if (isChecked) {
+                $('.file-checkbox').each(function() {
+                    selectedFiles.add(parseInt(this.value));
+                });
+            } else {
+                $('.file-checkbox').each(function() {
+                    selectedFiles.delete(parseInt(this.value));
+                });
+            }
+            
             updateBulkActions();
         });
 
         // Handle individual checkboxes
-        $(document).on('change', '.file-checkbox', function() {
+        $('.file-checkbox').off('change').on('change', function() {
+            const fileId = parseInt(this.value);
+            if (this.checked) {
+                selectedFiles.add(fileId);
+            } else {
+                selectedFiles.delete(fileId);
+            }
             updateBulkActions();
             updateSelectAllCheckbox();
+        });
+    }
+
+    // Update select all checkbox state
+    function updateSelectAllCheckbox() {
+        const totalCheckboxes = $('.file-checkbox').length;
+        const checkedCheckboxes = $('.file-checkbox:checked').length;
+        
+        if (checkedCheckboxes === 0) {
+            $('#selectAll').prop('indeterminate', false).prop('checked', false);
+        } else if (checkedCheckboxes === totalCheckboxes) {
+            $('#selectAll').prop('indeterminate', false).prop('checked', true);
+        } else {
+            $('#selectAll').prop('indeterminate', true);
+        }
+    }
+
+    // Initialize on page load
+    $(document).ready(function() {
+        // Load initial data
+        loadFiles();
+
+        // Search with debounce
+        let searchTimeout;
+        $('#searchInput').on('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                searchQuery = this.value.trim();
+                currentPage = 1;
+                loadFiles();
+            }, 300);
+        });
+
+        // Per page change
+        $('#perPageSelect').on('change', function() {
+            perPage = parseInt(this.value);
+            currentPage = 1;
+            loadFiles();
+        });
+
+        // Refresh button
+        $('#refreshBtn').on('click', function() {
+            loadFiles();
         });
     });
 
     function updateBulkActions() {
-        const selectedCount = $('.file-checkbox:checked').length;
+        const selectedCount = selectedFiles.size;
         const bulkActions = $('#bulkActions');
         const selectedCountSpan = $('#selectedCount');
         
@@ -596,15 +842,14 @@
     }
 
     function clearSelection() {
+        selectedFiles.clear();
         $('.file-checkbox').prop('checked', false);
         $('#selectAll').prop('checked', false).prop('indeterminate', false);
         updateBulkActions();
     }
 
     function getSelectedFileIds() {
-        return $('.file-checkbox:checked').map(function() {
-            return $(this).val();
-        }).get();
+        return Array.from(selectedFiles);
     }
 
     function bulkDeleteFiles() {
@@ -624,7 +869,7 @@
             
             // Delete each file
             Promise.all(selectedIds.map(id => 
-                fetch(`/api/file/${id}`, {
+                fetch('{{ url_for("main.api_delete_file", id=0) }}'.replace('0', id), {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' }
                 })
@@ -634,7 +879,9 @@
                 const successCount = results.filter(r => r.type === 'success').length;
                 if (successCount > 0) {
                     toastr.success(`Successfully deleted ${successCount} file${successCount > 1 ? 's' : ''}`);
-                    setTimeout(() => window.location.reload(), 1000);
+                    // Clear selection and reload data instead of page reload
+                    clearSelection();
+                    loadFiles();
                 } else {
                     toastr.error('Failed to delete files');
                 }
@@ -659,7 +906,7 @@
                 deleteButton.disabled = true;
                 deleteButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Deleting All...';
                 
-                fetch('/api/file/bulk-delete', {
+                fetch('{{ url_for("main.api_bulk_delete_files") }}', {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' }
                 })
@@ -667,7 +914,9 @@
                 .then(data => {
                     if (data.type === 'success') {
                         toastr.success(data.message);
-                        setTimeout(() => window.location.reload(), 1000);
+                        // Clear selection and reload data instead of page reload
+                        clearSelection();
+                        loadFiles();
                     } else {
                         toastr.error(data.message || 'Failed to delete all files');
                     }
@@ -719,7 +968,7 @@
         // Delete file function
         window.deleteFile = function (id) {
             if (confirm('Are you sure you want to delete this file?')) {
-                fetch(`/api/file/${id}`, {
+                fetch('{{ url_for("main.api_delete_file", id=0) }}'.replace('0', id), {
                     method: 'DELETE',
                     headers: {
                         'Content-Type': 'application/json'
@@ -729,9 +978,10 @@
                     .then(data => {
                         if (data.type === 'success') {
                             toastr.success(data.message);
-                            setTimeout(() => {
-                                window.location.reload();
-                            }, 1000);
+                            // Remove from selected files if it was selected
+                            selectedFiles.delete(parseInt(id));
+                            // Reload data instead of page reload
+                            loadFiles();
                         } else {
                             toastr.error(data.message);
                         }
@@ -1008,7 +1258,7 @@
                 });
             }, 200);
 
-            fetch('/api/file', {
+            fetch('{{ url_for("main.api_upload_file") }}', {
                     method: 'POST',
                     body: formData
                 })
@@ -1121,7 +1371,7 @@
                 updateUrlStatus(url, 'uploading', Math.min(progress, 90));
             }, 300);
 
-            fetch('/api/file', {
+            fetch('{{ url_for("main.api_upload_file") }}', {
                 method: 'POST',
                 body: formData
             })
@@ -1195,7 +1445,7 @@
             const originalButtonText = saveBtn.innerHTML;
             saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Uploading...';
 
-            fetch('/api/file', {
+            fetch('{{ url_for("main.api_upload_file") }}', {
                 method: 'POST',
                 body: formData
             })

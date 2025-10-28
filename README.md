@@ -1,3 +1,4 @@
+this is  astable version of demo hosted in 7777 port
 # AI-Powered Chatbot with FAQ Management
 
 A Flask-based chatbot application that uses OpenAI's GPT model to answer questions based on uploaded documents and FAQs. The system includes an admin interface for managing FAQs, documents, and user queries.
@@ -59,7 +60,7 @@ A Flask-based chatbot application that uses OpenAI's GPT model to answer questio
    ```
    This will:
    - Create the database tables
-   - Create an admin user (email: admin@gmail.com, password: 123456)
+   - Create an admin user (email: admin@example.com, password: 123456)
    - Set up initial application settings
 
 ## Running the Application
@@ -75,6 +76,12 @@ A Flask-based chatbot application that uses OpenAI's GPT model to answer questio
    export FLASK_ENV=production
    python app.py
    ```
+
+### Docker Container
+Minimal working example of Docker commands once everything else has been set up
+1. Create data path if not yet done: `mkdir datadir`
+2. Build Dockerfile & context into image, tagged "thesis-rag": `docker build . -t thesis-rag:latest`
+3. Run the tagged image "thesis-rag" and various volume mounts: `docker run --name thesis-rag -v .:/app -v ./datadir:/data -it -p 8080:8080 thesis-rag:latest`
 
 ## Project Structure
 
@@ -98,7 +105,7 @@ project/
 1. **Access the Admin Interface**
    - Go to `http://localhost:5000/admin/login`
    - Login with:
-     - Email: admin@gmail.com
+     - Email: admin@example.com
      - Password: 123456
 
 2. **Configure Settings**

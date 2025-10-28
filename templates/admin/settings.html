@@ -161,18 +161,36 @@
         <div class="card-body">
             <form method="POST" action="{{ url_for('main.admin_settings') }}" enctype="multipart/form-data">
                 <div class="row">
-                    <div class="col-lg-6 col-md-12 mb-3">
+                    <div class="col-lg-8 col-md-12 mb-3">
                         <label for="logo" class="form-label required-field">Application Name</label>
                         <input type="text" class="form-control" id="logo" name="logo" value="{{ settings.get('logo', '') }}"
                             required>
                     </div>
                     
-                    <div class="col-lg-6 col-md-12 mb-3">
+                    <div class="col-lg-4 col-md-12 mb-3">
                         <label for="show_matched_text" class="form-label">Show Matched Text</label>
                         <select class="form-select" id="show_matched_text" name="show_matched_text">
                             <option value="yes" {% if settings.get('show_matched_text') == 'yes' %}selected{% endif %}>Yes</option>
                             <option value="no" {% if settings.get('show_matched_text') == 'no' %}selected{% endif %}>No</option>
                         </select>
+                    </div>
+                    <div class="col-lg-4 col-md-12 mb-3">
+                        <label for="faq_search_enabled" class="form-label">Enable FAQ Search Suggestions</label>
+                        <select class="form-select" id="faq_search_enabled" name="faq_search_enabled">
+                            <option value="yes" {% if settings.get('faq_search_enabled', 'yes') == 'yes' %}selected{% endif %}>Yes</option>
+                            <option value="no" {% if settings.get('faq_search_enabled', 'yes') == 'no' %}selected{% endif %}>No</option>
+                        </select>
+                        <small class="text-muted">Show similar FAQ questions as users type</small>
+                    </div>
+                    <div class="col-lg-4 col-md-12 mb-3">
+                        <label for="chunk_number" class="form-label required-field">Similar Chunks</label>
+                        <input type="number" class="form-control" id="chunk_number" max=5 min=1 name="chunk_number" value="{{ settings.get('chunk_number', 3) }}"
+                            required>
+                    </div>
+                    <div class="col-lg-4 col-md-12 mb-3">
+                        <label for="message_history" class="form-label required-field">Message as Context (in pairs)</label>
+                        <input type="number" class="form-control" id="message_history" max=15 min=1 name="message_history" value="{{ settings.get('message_history', 10) }}"
+                            required>
                     </div>
                 </div>
 

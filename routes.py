@@ -148,8 +148,12 @@ def chat():
 
         if not file_ids:
             return handle_no_content(question, language)
-
-        results = search_across_indices(question, file_ids, top_k=3)
+        # get chunk number from settings
+        chunk_number = Settings.query.filter_by(key="chunk_number").first()
+        chunk_number = chunk_number.value if chunk_number and chunk_number.value else 3
+        # make it int
+        chunk_number = int(chunk_number)
+        results = search_across_indices(question, file_ids, top_k=chunk_number)
         if not results and not history_text:
             # Save query with answer_found=False and return no content message
             message = {
@@ -210,6 +214,7 @@ def chat():
         )
 
         answer = response.choices[0].message.content
+        used_file_names = []  # For PDF generation - just clean file names
         if used_files:
             files_list = []
             for f in used_files:
@@ -223,6 +228,7 @@ def chat():
                         parts = parsed.path.strip("/").split("/")
                         display += f"/{parts[0]}"
                     html = f"- <a href='{fname}' target='_blank'>{display}</a>"
+                    used_file_names.append(fname)
                     if show_matched_text == "yes":
                         html += (
                             f"<details><summary style='cursor:pointer; color:gray;'>View Original Text</summary>"
@@ -231,6 +237,7 @@ def chat():
                     files_list.append(html)
                 else:
                     html = f"- {fname}"
+                    used_file_names.append(fname)
                     if show_matched_text == "yes":
                         html += (
                             f"<details><summary style='cursor:pointer; color:gray;'>View Original Text</summary>"
@@ -239,12 +246,12 @@ def chat():
                     files_list.append(html)
 
             files_html = "<br>".join(files_list)
-            answer = f"{answer}<br><br><b>Sources used:</b><br>{files_html}"
+            sources_used = f"<br><br><b>Sources used:</b><br>{files_html}"
 
         # 6. Save query with the generated answer
         query = save_query(answer=answer)
-
-        return jsonify({"answer": answer, "type": "success", "query_id": query.id})
+        # PRINT clean_file_names
+        return jsonify({"answer": answer,"sources_used":sources_used, "used_file_names":used_file_names, "type": "success", "query_id": query.id})
 
     except Exception as e:
         print(f"Error in chat route: {str(e)}")
@@ -356,17 +363,15 @@ def admin_faqs():
 @main.route("/admin/files")
 @login_required
 def admin_files():
-    files = File.query.all()
     settings = {s.key: s.value for s in Settings.query.all()}
-    return render_template("admin/files.html", files=files, settings=settings)
+    return render_template("admin/files.html", files=[], settings=settings)
 
 
 @main.route("/admin/queries")
 @login_required
 def admin_queries():
-    queries = Query.query.all()
     settings = {s.key: s.value for s in Settings.query.all()}
-    return render_template("admin/queries.html", queries=queries, settings=settings)
+    return render_template("admin/queries.html", queries=[], settings=settings)
 
 
 @main.route("/admin/settings", methods=["GET", "POST"])
@@ -380,18 +385,21 @@ def admin_settings():
 
             settings_to_update = {
                 "logo": request.form.get("logo"),
+                "chunk_number": request.form.get("chunk_number"),
                 "openai_key": request.form.get("openai_key"),
                 "copyright": request.form.get("copyright"),
                 "about": request.form.get("about"),
                 "contact": request.form.get("contact"),
                 "openai_model": request.form.get("openai_model"),
                 "show_matched_text": request.form.get("show_matched_text", "yes"),
+                "faq_search_enabled": request.form.get("faq_search_enabled", "yes"),
                 "theme_primary_color": request.form.get("theme_primary_color", "#5b1fa6"),
                 "theme_secondary_color": request.form.get("theme_secondary_color", "#d1aff3"),
                 "theme_bot_message_color": request.form.get("theme_bot_message_color", "#f3f0fa"),
                 "theme_background_start": request.form.get("theme_background_start", "#f5f0ff"),
                 "theme_background_end": request.form.get("theme_background_end", "#ede3f7"),
                 "theme_accent_color": request.form.get("theme_accent_color", "#5b1fa6"),
+                "message_history": request.form.get("message_history", 10),
             }
 
             # Handle logo file upload
@@ -810,9 +818,9 @@ def check_duplicate_url(url):
 def api_upload_file():
     try:
         upload_type = request.form.get("uploadType")
-        print("Upload Type:", upload_type)
-        print("Request form data:", request.form)
-        print("Request files:", request.files)
+        # print("Upload Type:", upload_type)
+        # print("Request form data:", request.form)
+        # print("Request files:", request.files)
 
         if upload_type == "file":
             files = request.files.getlist("file")
@@ -899,7 +907,7 @@ def api_upload_file():
                     400,
                 )
 
-            print(f"Processing URL: {url}")
+            # print(f"Processing URL: {url}")
             text = extract_text_from_file(url)
             if not text:
                 return (
@@ -990,7 +998,7 @@ def delete_associated_files(file_identifier):
         for file_path in file_paths.values():
             if os.path.exists(file_path):
                 os.remove(file_path)
-                print(f"Deleted associated file: {file_path}")
+                # print(f"Deleted associated file: {file_path}")
     except Exception as e:
         print(f"Error deleting associated files: {str(e)}")
 
@@ -1021,12 +1029,12 @@ def api_manage_faq(faq_id):
 
             except Exception as e:
                 db.session.rollback()
-                print(f"Error generating embeddings: {e}")
+                # print(f"Error generating embeddings: {e}")
                 return jsonify({"error": str(e)}), 500
 
     except Exception as e:
         db.session.rollback()
-        print(f"Error managing FAQ: {e}")
+        # print(f"Error managing FAQ: {e}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -1190,7 +1198,200 @@ def api_delete_all_queries():
         return jsonify({"message": "All queries deleted successfully"})
     except Exception as e:
         db.session.rollback()
-        print(f"Error deleting all queries: {e}")
+        # print(f"Error deleting all queries: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@main.route("/api/search-faqs", methods=["POST"])
+def search_faqs():
+    """Search FAQs based on text matching for real-time suggestions."""
+    try:
+        data = request.get_json()
+        query = data.get("query", "").strip()
+        
+        if not query or len(query) < 3:
+            return jsonify({"suggestions": []})
+        
+        # Get all FAQs
+        faqs = FAQ.query.all()
+        if not faqs:
+            return jsonify({"suggestions": []})
+        
+        # Text matching algorithm
+        query_words = set(query.lower().split())
+        scored_faqs = []
+        
+        for faq in faqs:
+            faq_words = set(faq.question.lower().split())
+            
+            # Calculate word matches
+            matching_words = query_words.intersection(faq_words)
+            match_count = len(matching_words)
+            total_query_words = len(query_words)
+            
+            if match_count == 0:
+                continue
+                
+            # Calculate match percentage
+            match_percentage = (match_count / total_query_words) * 100
+            
+            # Bonus for exact phrase match
+            exact_match_bonus = 0
+            if query.lower() in faq.question.lower():
+                exact_match_bonus = 20
+            
+            # Final score
+            score = match_percentage + exact_match_bonus
+            
+            scored_faqs.append({
+                "id": faq.id,
+                "question": faq.question,
+                "score": score
+            })
+        
+        # Sort by score (highest first) and return top 5
+        scored_faqs.sort(key=lambda x: x["score"], reverse=True)
+        suggestions = scored_faqs[:5]
+        
+        return jsonify({"suggestions": suggestions})
+        
+    except Exception as e:
+        print(f"Error in search_faqs: {str(e)}")
+        return jsonify({"suggestions": []}), 500
+
+
+@main.route("/api/admin/files/paginated", methods=["GET"])
+@login_required
+def api_files_paginated():
+    """Get paginated files data for admin panel."""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        search = request.args.get('search', '', type=str)
+        order_by = request.args.get('order_by', 'id', type=str)
+        order_dir = request.args.get('order_dir', 'desc', type=str)
+        
+        # Validate per_page to prevent abuse
+        per_page = min(per_page, 100)
+        
+        # Build query with search filter
+        query = File.query.join(User, File.user_id == User.id)
+        
+        if search:
+            query = query.filter(
+                File.original_filename.ilike(f'%{search}%') |
+                File.text.ilike(f'%{search}%')
+            )
+        
+        # Apply ordering
+        if hasattr(File, order_by):
+            if order_dir == 'desc':
+                query = query.order_by(getattr(File, order_by).desc())
+            else:
+                query = query.order_by(getattr(File, order_by).asc())
+        else:
+            # Default ordering
+            query = query.order_by(File.id.desc())
+        
+        # Apply pagination
+        pagination = query.paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False
+        )
+        
+        # Prepare data with truncated text
+        files_data = []
+        for file in pagination.items:
+            files_data.append({
+                'id': file.id,
+                'original_filename': file.original_filename,
+                'text': file.text[:100] + '...' if len(file.text) > 100 else file.text,
+                'user_name': file.user.name if file.user else 'Unknown',
+                'created_at': file.created_at.strftime('%Y-%m-%d %H:%M'),
+                'file_identifier': file.file_identifier
+            })
+        
+        return jsonify({
+            'data': files_data,
+            'total': pagination.total,
+            'pages': pagination.pages,
+            'current_page': pagination.page,
+            'per_page': pagination.per_page,
+            'has_prev': pagination.has_prev,
+            'has_next': pagination.has_next
+        })
+        
+    except Exception as e:
+        print(f"Error in api_files_paginated: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@main.route("/api/admin/queries/paginated", methods=["GET"])
+@login_required
+def api_queries_paginated():
+    """Get paginated queries data for admin panel."""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        search = request.args.get('search', '', type=str)
+        order_by = request.args.get('order_by', 'id', type=str)
+        order_dir = request.args.get('order_dir', 'desc', type=str)
+        
+        # Validate per_page to prevent abuse
+        per_page = min(per_page, 100)
+        
+        # Build query with search filter
+        query = Query.query
+        
+        if search:
+            query = query.filter(
+                Query.question.ilike(f'%{search}%') |
+                Query.answer.ilike(f'%{search}%')
+            )
+        
+        # Apply ordering
+        if hasattr(Query, order_by):
+            if order_dir == 'desc':
+                query = query.order_by(getattr(Query, order_by).desc())
+            else:
+                query = query.order_by(getattr(Query, order_by).asc())
+        else:
+            # Default ordering
+            query = query.order_by(Query.id.desc())
+        
+        # Apply pagination
+        pagination = query.paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False
+        )
+        
+        # Prepare data
+        queries_data = []
+        for query in pagination.items:
+            queries_data.append({
+                'id': query.id,
+                'question': query.question[:100] + '...' if len(query.question) > 100 else query.question,
+                'answer': query.answer[:100] + '...' if query.answer and len(query.answer) > 100 else query.answer,
+                'answer_found': query.answer_found,
+                'happy': query.happy,
+                'language': query.language,
+                'created_at': query.created_at.strftime('%Y-%m-%d %H:%M')
+            })
+        
+        return jsonify({
+            'data': queries_data,
+            'total': pagination.total,
+            'pages': pagination.pages,
+            'current_page': pagination.page,
+            'per_page': pagination.per_page,
+            'has_prev': pagination.has_prev,
+            'has_next': pagination.has_next
+        })
+        
+    except Exception as e:
+        print(f"Error in api_queries_paginated: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -1231,7 +1432,7 @@ def regenerate_missing_embeddings():
             file_identifier = generate_and_store_embeddings(file.text)
             if file_identifier:
                 file.file_identifier = file_identifier
-                print(f"Regenerated embedding for file {file.id}")
+                # print(f"Regenerated embedding for file {file.id}")
 
         # Check FAQs
         faqs = FAQ.query.filter_by(embedding=None).all()
@@ -1240,7 +1441,7 @@ def regenerate_missing_embeddings():
             file_identifier = generate_and_store_embeddings(combined_text)
             if file_identifier:
                 faq.embedding = json.dumps(file_identifier)
-                print(f"Regenerated embedding for FAQ {faq.id}")
+                # print(f"Regenerated embedding for FAQ {faq.id}")
 
         db.session.commit()
         return True
