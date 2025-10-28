@@ -20,7 +20,12 @@
             background-color: #4e73df;
             background-image: linear-gradient(180deg, #4e73df 10%, #224abe 100%);
             background-size: cover;
-            transition: all 0.3s;
+            transition: all 0.3s ease;
+            position: fixed;
+            left: 0;
+            top: 0;
+            z-index: 1000;
+            overflow-y: auto;
         }
         .sidebar .nav-link {
             color: rgba(255, 255, 255, 0.8);
@@ -29,6 +34,9 @@
             font-size: 0.95rem;
             transition: all 0.2s;
             border-left: 4px solid transparent;
+            min-height: 48px;
+            display: flex;
+            align-items: center;
         }
         .sidebar .nav-link:hover {
             color: #fff;
@@ -44,6 +52,7 @@
             margin-right: 0.75rem;
             width: 1.25rem;
             text-align: center;
+            flex-shrink: 0;
         }
         .sidebar .logo-container {
             padding: 1.5rem 1rem;
@@ -57,78 +66,182 @@
         .topbar {
             height: 4.375rem;
             box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+            position: sticky;
+            top: 0;
+            z-index: 999;
         }
         .content-wrapper {
             min-height: calc(100vh - 4.375rem);
             padding: 1.5rem;
+            margin-left: 280px;
+            transition: margin-left 0.3s ease;
         }
         .nav-divider {
             height: 1px;
             background-color: rgba(255, 255, 255, 0.1);
             margin: 0.5rem 0;
         }
-        @media (max-width: 768px) {
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 999;
+        }
+        .sidebar-overlay.show {
+            display: block;
+        }
+        
+        /* Mobile Styles */
+        @media (max-width: 991.98px) {
             .sidebar {
-                width: 0;
-                min-width: 0;
-                position: fixed;
-                z-index: 1000;
+                transform: translateX(-100%);
+                width: 280px;
             }
             .sidebar.show {
-                width: 280px;
-                min-width: 280px;
+                transform: translateX(0);
             }
             .content-wrapper {
+                margin-left: 0;
                 padding: 1rem;
+            }
+            .topbar {
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+        }
+        
+        @media (max-width: 576px) {
+            .content-wrapper {
+                padding: 0.75rem;
+            }
+            .topbar {
+                height: auto;
+                min-height: 4.375rem;
+                padding: 0.5rem 1rem;
+            }
+            .navbar-brand {
+                font-size: 1.1rem;
+            }
+            .btn-sm {
+                padding: 0.375rem 0.75rem;
+                font-size: 0.875rem;
+            }
+        }
+        
+        /* Touch-friendly buttons */
+        .btn {
+            min-height: 44px;
+            min-width: 44px;
+        }
+        .btn-sm {
+            min-height: 36px;
+            min-width: 36px;
+        }
+        
+        /* Responsive tables */
+        .table-responsive {
+            border-radius: 0.375rem;
+        }
+        
+        /* Mobile table cards */
+        @media (max-width: 768px) {
+            .table-mobile-cards {
+                display: block;
+            }
+            .table-mobile-cards thead {
+                display: none;
+            }
+            .table-mobile-cards tbody {
+                display: block;
+            }
+            .table-mobile-cards tr {
+                display: block;
+                margin-bottom: 1rem;
+                border: 1px solid #dee2e6;
+                border-radius: 0.375rem;
+                padding: 1rem;
+                background: white;
+                box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+            }
+            .table-mobile-cards td {
+                display: block;
+                border: none;
+                padding: 0.25rem 0;
+                text-align: left !important;
+            }
+            .table-mobile-cards td:before {
+                content: attr(data-label) ": ";
+                font-weight: bold;
+                display: inline-block;
+                width: 40%;
+                margin-right: 0.5rem;
+            }
+            .table-mobile-cards .col-actions {
+                text-align: center !important;
+                margin-top: 0.5rem;
+                padding-top: 0.5rem;
+                border-top: 1px solid #dee2e6;
+            }
+            .table-mobile-cards .col-actions:before {
+                display: none;
+            }
+            .top-userName {
+                display: none;
             }
         }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <div class="d-flex">
-        <!-- Sidebar -->
-        <div class="sidebar">
-            <div class="logo-container">
-                <a href="{{ url_for('main.index') }}" target="_blank" style="text-decoration: none;">
-                    <h4 class="text-white">{{ settings.get('logo', 'ChatBot') }}</h4>
-                </a>
-            </div>
-            <div class="nav flex-column">
-                <a href="{{ url_for('main.admin_dashboard') }}" class="nav-link {% if request.endpoint == 'main.admin_dashboard' %}active{% endif %}">
-                    <i class="fas fa-tachometer-alt"></i>Dashboard
-                </a>
-                <a href="{{ url_for('main.admin_profile') }}" class="nav-link {% if request.endpoint == 'main.admin_profile' %}active{% endif %}">
-                    <i class="fas fa-user"></i>Profile
-                </a>
-                <a href="{{ url_for('main.admin_roles') }}" class="nav-link {% if request.endpoint == 'main.admin_roles' %}active{% endif %}">
-                    <i class="fas fa-user-tag"></i>Roles
-                </a>
-                <a href="{{ url_for('main.admin_users') }}" class="nav-link {% if request.endpoint == 'main.admin_users' %}active{% endif %}">
-                    <i class="fas fa-users"></i>Users
-                </a>
-                <div class="nav-divider"></div>
-                <a href="{{ url_for('main.admin_faqs') }}" class="nav-link {% if request.endpoint == 'main.admin_faqs' %}active{% endif %}">
-                    <i class="fas fa-question-circle"></i>FAQs
-                </a>
-                <a href="{{ url_for('main.admin_new_questions') }}" class="nav-link {% if request.endpoint == 'main.admin_new_questions' %}active{% endif %}">
-                    <i class="fas fa-question"></i>New Questions
-                </a>
-                <a href="{{ url_for('main.admin_files') }}" class="nav-link {% if request.endpoint == 'main.admin_files' %}active{% endif %}">
-                    <i class="fas fa-file"></i>Files
-                </a>
-                <a href="{{ url_for('main.admin_queries') }}" class="nav-link {% if request.endpoint == 'main.admin_queries' %}active{% endif %}">
-                    <i class="fas fa-search"></i>Queries
-                </a>
-                <div class="nav-divider"></div>
-                <a href="{{ url_for('main.admin_settings') }}" class="nav-link {% if request.endpoint == 'main.admin_settings' %}active{% endif %}">
-                    <i class="fas fa-cog"></i>Settings
-                </a>
-                <a href="{{ url_for('main.admin_logout') }}" class="nav-link text-danger">
-                    <i class="fas fa-sign-out-alt"></i>Logout
-                </a>
-            </div>
+    <!-- Sidebar Overlay for Mobile -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+    
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar">
+        <div class="logo-container">
+            <a href="{{ url_for('main.index') }}" target="_blank" style="text-decoration: none;">
+                <h4 class="text-white">{{ settings.get('logo', 'ChatBot') }}</h4>
+            </a>
         </div>
+        <div class="nav flex-column">
+            <a href="{{ url_for('main.admin_dashboard') }}" class="nav-link {% if request.endpoint == 'main.admin_dashboard' %}active{% endif %}">
+                <i class="fas fa-tachometer-alt"></i>Dashboard
+            </a>
+            <a href="{{ url_for('main.admin_profile') }}" class="nav-link {% if request.endpoint == 'main.admin_profile' %}active{% endif %}">
+                <i class="fas fa-user"></i>Profile
+            </a>
+            <a href="{{ url_for('main.admin_roles') }}" class="nav-link {% if request.endpoint == 'main.admin_roles' %}active{% endif %}">
+                <i class="fas fa-user-tag"></i>Roles
+            </a>
+            <a href="{{ url_for('main.admin_users') }}" class="nav-link {% if request.endpoint == 'main.admin_users' %}active{% endif %}">
+                <i class="fas fa-users"></i>Users
+            </a>
+            <div class="nav-divider"></div>
+            <a href="{{ url_for('main.admin_faqs') }}" class="nav-link {% if request.endpoint == 'main.admin_faqs' %}active{% endif %}">
+                <i class="fas fa-question-circle"></i>FAQs
+            </a>
+            <a href="{{ url_for('main.admin_new_questions') }}" class="nav-link {% if request.endpoint == 'main.admin_new_questions' %}active{% endif %}">
+                <i class="fas fa-question"></i>New Questions
+            </a>
+            <a href="{{ url_for('main.admin_files') }}" class="nav-link {% if request.endpoint == 'main.admin_files' %}active{% endif %}">
+                <i class="fas fa-file"></i>Files
+            </a>
+            <a href="{{ url_for('main.admin_queries') }}" class="nav-link {% if request.endpoint == 'main.admin_queries' %}active{% endif %}">
+                <i class="fas fa-search"></i>Queries
+            </a>
+            <div class="nav-divider"></div>
+            <a href="{{ url_for('main.admin_settings') }}" class="nav-link {% if request.endpoint == 'main.admin_settings' %}active{% endif %}">
+                <i class="fas fa-cog"></i>Settings
+            </a>
+            <a href="{{ url_for('main.admin_logout') }}" class="nav-link text-danger">
+                <i class="fas fa-sign-out-alt"></i>Logout
+            </a>
+        </div>
+    </div>
 
         <!-- Main Content -->
         <div class="flex-grow-1">
@@ -140,7 +253,7 @@
                     </button>
                     <span class="navbar-brand mb-0 h1">{{ settings.get('logo', 'ChatBot') }} Admin</span>
                     <div class="d-flex align-items-center">
-                        <span class="me-3">Welcome, {{ current_user.name }}</span>
+                        <span class="me-3 top-userName">Welcome, {{ current_user.name }}</span>
                         <a href="{{ url_for('main.admin_logout') }}" class="btn btn-outline-danger btn-sm">
                             <i class="fas fa-sign-out-alt"></i> Logout
                         </a>
@@ -182,9 +295,47 @@
         };
     </script>
     <script>
-        // Toggle sidebar on mobile
-        document.getElementById('sidebarToggle').addEventListener('click', function() {
-            document.querySelector('.sidebar').classList.toggle('show');
+        // Mobile sidebar functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const sidebarToggle = document.getElementById('sidebarToggle');
+            const sidebar = document.getElementById('sidebar');
+            const sidebarOverlay = document.getElementById('sidebarOverlay');
+            
+            // Toggle sidebar
+            function toggleSidebar() {
+                sidebar.classList.toggle('show');
+                sidebarOverlay.classList.toggle('show');
+            }
+            
+            // Close sidebar
+            function closeSidebar() {
+                sidebar.classList.remove('show');
+                sidebarOverlay.classList.remove('show');
+            }
+            
+            // Event listeners
+            if (sidebarToggle) {
+                sidebarToggle.addEventListener('click', toggleSidebar);
+            }
+            
+            if (sidebarOverlay) {
+                sidebarOverlay.addEventListener('click', closeSidebar);
+            }
+            
+            // Close sidebar when clicking on nav links (mobile only)
+            if (window.innerWidth <= 991.98) {
+                const navLinks = document.querySelectorAll('.sidebar .nav-link');
+                navLinks.forEach(link => {
+                    link.addEventListener('click', closeSidebar);
+                });
+            }
+            
+            // Handle window resize
+            window.addEventListener('resize', function() {
+                if (window.innerWidth > 991.98) {
+                    closeSidebar();
+                }
+            });
         });
     </script>
     {% block extra_js %}{% endblock %}

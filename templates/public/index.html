@@ -1,5 +1,1015 @@
 {% extends "base.html" %}
 
+{% block extra_css %}
+<style>
+    html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        -webkit-text-size-adjust: 100%;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+    }
+    
+    :root {
+        --primary-color: {{ settings.get('theme_primary_color', '#5b1fa6') }};
+        --secondary-color: {{ settings.get('theme_secondary_color', '#d1aff3') }};
+        --bot-message-color: {{ settings.get('theme_bot_message_color', '#f3f0fa') }};
+        --bg-gradient-start: {{ settings.get('theme_background_start', '#f5f0ff') }};
+        --bg-gradient-end: {{ settings.get('theme_background_end', '#ede3f7') }};
+        --accent-color: {{ settings.get('theme_accent_color', '#5b1fa6') }};
+    }
+
+    .visitor-bg {
+        height: 100vh;
+        background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+    
+    
+    .visitor-navbar {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--primary-color);
+        color: #fff;
+        padding: 1rem;
+        height: 60px;
+        flex-shrink: 0;
+        width: 100%;
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    
+    .nav-main {
+        max-width: 1500px;
+        margin: 0 auto;
+        width: 100%;
+        padding: 0 1rem;
+    }
+    
+    .navbar-logo {
+        font-weight: 700;
+        font-size: 1.5rem;
+        color: #fff;
+        letter-spacing: 1px;
+        transition: transform 0.3s ease;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 200px;
+    }
+    
+    .navbar-logo:hover {
+        transform: scale(1.05);
+    }
+    
+    .main-content-wrapper {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        min-height: 0;
+        max-width: 1400px;
+        margin: 1rem auto;
+        width: 100%;
+        box-shadow: 0 2px 16px rgba(91,31,166,0.08);
+        padding: 0 1rem;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(10px);
+        height: calc(100vh - 110px); /* Account for navbar and footer */
+    }
+    
+    .visitor-sidebar {
+        background: #fff;
+        width: 25%;
+        min-width: 250px;
+        max-width: 350px;
+        border-right: 1px solid #eee;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+    }
+    
+    .sidebar-header {
+        background: #fff;
+        flex-shrink: 0;
+        padding: 1rem;
+    }
+    
+    .sidebar-title {
+        font-weight: 600;
+        color: var(--accent-color);
+        letter-spacing: 1px;
+        font-size: 1.2rem;
+    }
+    
+    .sidebar-divider {
+        border-color: var(--accent-color);
+        opacity: 0.2;
+        margin: 0.5rem 0;
+    }
+    
+    .sidebar-faq-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1rem;
+        min-height: 0;
+        height: 100%;
+    }
+    
+    .faq-bullets {
+        padding-right: 0.5rem;
+    }
+    
+    .faq-bullets li {
+        font-size: 0.95rem;
+        transition: transform 0.2s ease;
+        background-color: #f6f5f7;
+        border-radius: 8px;
+        margin-bottom: 2px;
+    }
+    
+    .faq-bullet-link {
+        display: inline-block;
+        transition: all 0.3s ease;
+        color: var(--accent-color);
+        font-size: 0.95rem;
+        text-decoration: none;
+        padding: 0.5rem;
+        border-radius: 8px;
+        width: 100%;
+    }
+    
+    .faq-bullet-link:hover {
+        color: #000000;
+        background: var(--bot-message-color);
+        transform: translateX(5px);
+    }
+    
+    .visitor-main-bg {
+        background: #f8f5ff;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        min-height: 0;
+        border-radius: 12px;
+    }
+    
+    .visitor-chat-container {
+        background: rgba(255, 255, 255, 0.8);
+        box-shadow: 0 2px 16px rgba(91,31,166,0.08);
+        padding: 1.5rem;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        border-radius: 12px;
+    }
+    
+    .quick-faq-btn {
+        background: #f3f0fa;
+        border: none;
+        border-radius: 8px;
+        padding: 0.75rem 1rem;
+        margin-bottom: 0.5rem;
+        color: #333;
+        font-size: 0.95rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    
+    .quick-faq-btn:hover {
+        background: color-mix(in srgb, var(--bot-message-color) 80%, var(--accent-color) 20%);
+        color: var(--accent-color);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    .visitor-chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        margin-bottom: 1rem;
+        padding-right: 0.5rem;
+        min-height: 0;
+        display: flex;
+        flex-direction: column-reverse;
+        gap: 1rem;
+    }
+    
+    .visitor-message {
+        margin-bottom: 0.75rem;
+        display: flex;
+        flex-direction: column;
+        animation: fadeIn 0.3s ease;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    .user-message .visitor-message-content {
+        background: var(--secondary-color);
+        color: #000000;
+        align-self: flex-end;
+        border-radius: 12px 12px 0 12px;
+        padding: 0.75rem 1rem;
+        max-width: 80%;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .bot-message .visitor-message-content {
+        background: var(--bot-message-color);
+        color: #333;
+        align-self: flex-start;
+        border-radius: 12px 12px 12px 0;
+        padding: 0.75rem 1rem;
+        max-width: 80%;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .visitor-chat-form {
+        margin-top: auto;
+        width: 100%;
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+    
+    .visitor-chat-input {
+        border-radius: 8px;
+        border: 1px solid #e0d3f7;
+        padding: 0.75rem 1rem;
+        font-size: 0.95rem;
+        background: #fff;
+        color: #333;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        flex: 1;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+    }
+    
+    .visitor-chat-input:focus {
+        outline: none;
+        border-color: #5b1fa6;
+        box-shadow: 0 2px 8px rgba(91,31,166,0.1);
+    }
+    
+    .visitor-send-btn {
+        background: var(--primary-color);
+        color: #fff;
+        border-radius: 8px;
+        font-size: 1.25rem;
+        padding: 0.5rem 1.25rem;
+        border: none;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 45px;
+    }
+    
+    .visitor-send-btn:hover {
+        background: color-mix(in srgb, var(--primary-color) 80%, black);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    
+    .visitor-footer {
+        background: var(--primary-color);
+        color: #fff;
+        font-size: 0.9rem;
+        letter-spacing: 1px;
+        height: 50px;
+        flex-shrink: 0;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .nav-icons {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .visitor-info-btn {
+        background: transparent;
+        color: #fff;
+        border: none;
+        font-size: 1.25rem;
+        box-shadow: none;
+        transition: all 0.3s ease;
+        padding: 0.5rem;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    
+    .nav-icon-text {
+        display: inline-block;
+    }
+    
+    .visitor-info-btn:hover {
+        color: #e0d3f7;
+        background: rgba(255,255,255,0.1);
+        transform: scale(1.1);
+    }
+    
+    /* Mobile Responsive Design */
+    @media (max-width: 991.98px) {
+        .main-content-wrapper {
+            margin: 0.5rem;
+            padding: 0.5rem;
+            height: calc(100vh - 110px);
+        }
+    
+        .visitor-sidebar {
+            display: none;
+        }
+    
+        .visitor-main-bg {
+            width: 100%;
+            border-radius: 8px;
+        }
+    
+        .visitor-chat-container {
+            padding: 1rem;
+            border-radius: 8px;
+        }
+    
+        .user-message .visitor-message-content,
+        .bot-message .visitor-message-content {
+            max-width: 85%;
+            font-size: 0.9rem;
+        }
+    
+        .hamburger-btn {
+            display: flex !important;
+        }
+    
+        .nav-icons {
+            display: none !important;
+        }
+    
+        .quick-faq-btn {
+            font-size: 0.85rem;
+            padding: 0.6rem 0.8rem;
+        }
+
+        .faq-suggestions-container {
+            margin-bottom: 0.75rem;
+            max-height: 180px;
+        }
+
+        .faq-suggestions-list {
+            max-height: 130px;
+        }
+
+        .faq-suggestion-item {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.85rem;
+        }
+    }
+    
+    @media (max-width: 767.98px) {
+        .visitor-bg {
+        height: 97vh;
+        }
+        .navbar-logo {
+            font-size: 1.1rem;
+            max-width: 120px;
+        }
+    
+        .visitor-navbar {
+            padding: 0.75rem;
+            height: 55px;
+        }
+    
+        .nav-main {
+            padding: 0 0.75rem;
+        }
+    
+        .visitor-chat-form {
+            flex-direction: row;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            margin-top: 0.5rem;
+        }
+    
+        .visitor-chat-input {
+            font-size: 16px; /* Prevents zoom on iOS */
+            padding: 0.75rem 0.8rem;
+            border-radius: 6px;
+        }
+    
+        .visitor-send-btn {
+            padding: 0.75rem;
+            font-size: 1rem;
+            min-width: 45px;
+            border-radius: 6px;
+        }
+    
+        .main-content-wrapper {
+            margin: 0;
+            padding: 0;
+            border-radius: 0;
+            height: calc(100vh - 105px);
+        }
+    
+        .visitor-main-bg {
+            border-radius: 0;
+        }
+    
+        .visitor-chat-container {
+            border-radius: 0;
+            padding: 0.75rem;
+        }
+    
+        .user-message .visitor-message-content,
+        .bot-message .visitor-message-content {
+            max-width: 90%;
+            font-size: 0.85rem;
+            padding: 0.6rem 0.8rem;
+        }
+    
+        .quick-faq-btn {
+            font-size: 0.8rem;
+            padding: 0.5rem 0.6rem;
+            margin-bottom: 0.4rem;
+        }
+
+        .faq-suggestions-container {
+            margin-bottom: 0.5rem;
+            max-height: 160px;
+        }
+
+        .faq-suggestions-list {
+            max-height: 110px;
+        }
+
+        .faq-suggestion-item {
+            padding: 0.35rem 0.7rem;
+            font-size: 0.8rem;
+        }
+    
+        .visitor-footer {
+            height: 50px;
+            font-size: 0.8rem;
+        }
+    
+        .visitor-chat-messages {
+            margin-bottom: 0.75rem;
+            padding-right: 0.25rem;
+        }
+    }
+    
+    /* Add smooth scrolling */
+    .visitor-chat-messages {
+        scroll-behavior: smooth;
+    }
+    
+    /* Improve scrollbar appearance */
+    .visitor-chat-messages::-webkit-scrollbar,
+    .sidebar-faq-list::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    .visitor-chat-messages::-webkit-scrollbar-track,
+    .sidebar-faq-list::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 3px;
+    }
+    
+    .visitor-chat-messages::-webkit-scrollbar-thumb,
+    .sidebar-faq-list::-webkit-scrollbar-thumb {
+        background: #c1b1e0;
+        border-radius: 3px;
+    }
+    
+    .visitor-chat-messages::-webkit-scrollbar-thumb:hover,
+    .sidebar-faq-list::-webkit-scrollbar-thumb:hover {
+        background: #a391d0;
+    }
+    
+    /* Loading animation */
+    .temporary {
+        opacity: 0.7;
+        animation: pulse 1.5s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 0.7; }
+        50% { opacity: 0.4; }
+        100% { opacity: 0.7; }
+    }
+    
+    /* Feedback buttons styling */
+    .feedback-buttons {
+        display: flex;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+    }
+    
+    .feedback-buttons .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+        border-radius: 6px;
+        transition: all 0.3s ease;
+    }
+    
+    .feedback-buttons .btn:hover {
+        transform: translateY(-2px);
+    }
+    
+    /* Download Chat Button Styling */
+    .download-chat-btn {
+        background: var(--primary-color);
+        color: #fff;
+        border: 1px solid var(--primary-color);
+        border-radius: 6px;
+        padding: 0.4rem 0.8rem;
+        font-size: 0.85rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+    
+    .download-chat-btn:hover {
+        background: color-mix(in srgb, var(--primary-color) 80%, black);
+        color: #fff;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    
+    .download-chat-btn:active {
+        transform: translateY(0);
+    }
+    
+    .chat-controls {
+        padding: 0.5rem 0;
+        border-top: 1px solid #e0d3f7;
+        margin-top: 0.5rem;
+    }
+    
+    .chat-info {
+        color: #666;
+        font-size: 0.8rem;
+    }
+
+    /* FAQ Suggestions Styling */
+    .faq-suggestions-container {
+        background: #fff;
+        border: 1px solid #e0d3f7;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 8px rgba(91,31,166,0.1);
+        max-height: 200px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+
+    .faq-suggestions-header {
+        padding: 0.5rem 1rem;
+        background: var(--bot-message-color);
+        border-bottom: 1px solid #e0d3f7;
+        font-weight: 500;
+    }
+
+    .faq-suggestions-list {
+        max-height: 150px;
+        overflow-y: auto;
+        padding: 0.25rem 0;
+    }
+
+    .faq-suggestion-item {
+        padding: 0.5rem 1rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 0.9rem;
+        line-height: 1.4;
+        color: #333;
+        display: block;
+        text-decoration: none;
+    }
+
+    .faq-suggestion-item:hover {
+        background: var(--bot-message-color);
+        color: var(--accent-color);
+        transform: translateX(2px);
+    }
+
+    .faq-suggestion-item:last-child {
+        border-bottom: none;
+    }
+
+    .faq-suggestion-item .suggestion-text {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* FAQ Suggestions Scrollbar */
+    .faq-suggestions-list::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    .faq-suggestions-list::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 2px;
+    }
+
+    .faq-suggestions-list::-webkit-scrollbar-thumb {
+        background: #c1b1e0;
+        border-radius: 2px;
+    }
+
+    .faq-suggestions-list::-webkit-scrollbar-thumb:hover {
+        background: #a391d0;
+    }
+
+    /* Language toggle improvements */
+    .language-toggle {
+        position: relative;
+        margin-right: 1rem;
+    }
+    
+    .toggle-switch {
+        position: relative;
+        width: 80px;
+        height: 32px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        transition: all 0.3s ease;
+    }
+    
+    .toggle-input {
+        display: none;
+    }
+    
+    .toggle-label {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 16px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        overflow: hidden;
+    }
+    
+    .toggle-text-en,
+    .toggle-text-fi {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 1px;
+        transition: all 0.3s ease;
+        color: #fff;
+        z-index: 1;
+    }
+    
+    .toggle-text-en {
+        left: 12px;
+    }
+    
+    .toggle-text-fi {
+        right: 12px;
+    }
+    
+    .toggle-handle {
+        position: absolute;
+        top: 4px;
+        left: 4px;
+        width: 24px;
+        height: 24px;
+        background: #fff;
+        border-radius: 50%;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        z-index: 2;
+    }
+    
+    .toggle-input:checked + .toggle-label {
+        background: rgba(255, 255, 255, 0.2);
+    }
+    
+    .toggle-input:checked + .toggle-label .toggle-handle {
+        left: calc(100% - 28px);
+        background: #fff;
+    }
+    
+    .toggle-input:checked + .toggle-label .toggle-text-en {
+        opacity: 0.5;
+    }
+    
+    .toggle-input:checked + .toggle-label .toggle-text-fi {
+        opacity: 1;
+    }
+    
+    .toggle-input:not(:checked) + .toggle-label .toggle-text-en {
+        opacity: 1;
+    }
+    
+    .toggle-input:not(:checked) + .toggle-label .toggle-text-fi {
+        opacity: 0.5;
+    }
+    
+    .toggle-label:hover {
+        background: rgba(255, 255, 255, 0.15);
+    }
+    
+    .toggle-label:hover .toggle-handle {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+    
+    @media (max-width: 767.98px) {
+        .toggle-switch {
+            width: 70px;
+            height: 28px;
+        }
+    
+        .toggle-handle {
+            width: 20px;
+            height: 20px;
+            top: 4px;
+            left: 4px;
+        }
+    
+        .toggle-input:checked + .toggle-label .toggle-handle {
+            left: calc(100% - 24px);
+        }
+    
+        .toggle-text-en,
+        .toggle-text-fi {
+            font-size: 11px;
+        }
+    
+        .toggle-text-en {
+            left: 10px;
+        }
+    
+        .toggle-text-fi {
+            right: 10px;
+        }
+    }
+    
+    /* Hamburger Menu Styles */
+    .hamburger-btn {
+        background: transparent;
+        border: none;
+        padding: 0.5rem;
+        cursor: pointer;
+        display: none;
+        flex-direction: column;
+        justify-content: space-between;
+        width: 30px;
+        height: 24px;
+        margin-left: 0.5rem;
+    }
+    
+    .hamburger-btn span {
+        display: block;
+        width: 100%;
+        height: 2px;
+        background-color: #fff;
+        transition: all 0.3s ease;
+    }
+    
+    .mobile-menu-overlay {
+        position: fixed;
+        top: 60px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.5);
+        z-index: 1000;
+        display: none;
+        opacity: 0;
+        transition: opacity 0.3s ease;
+    }
+    
+    .mobile-menu-overlay.active {
+        display: block;
+        opacity: 1;
+    }
+    
+    .mobile-menu-content {
+        position: absolute;
+        top: 0;
+        right: 0;
+        width: 280px;
+        height: 100%;
+        background: #fff;
+        display: flex;
+        flex-direction: column;
+        transform: translateX(100%);
+        transition: transform 0.3s ease;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .mobile-menu-overlay.active .mobile-menu-content {
+        transform: translateX(0);
+    }
+    
+    .mobile-menu-header {
+        padding: 1rem;
+        background: var(--primary-color);
+        color: #fff;
+    }
+    
+    .mobile-menu-faq-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1rem;
+    }
+    
+    .mobile-menu-footer {
+        padding: 1rem;
+        background: #f8f5ff;
+        display: flex;
+        justify-content: space-around;
+        border-top: 1px solid #e0d3f7;
+    }
+    
+    .mobile-menu-footer .visitor-info-btn {
+        color: var(--accent-color);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.9rem;
+    }
+    
+    .mobile-menu-footer .visitor-info-btn i {
+        font-size: 1.2rem;
+    }
+    
+    /* Additional mobile optimizations */
+    @media (max-width: 480px) {
+        .navbar-logo {
+            font-size: 1rem;
+            max-width: 100px;
+        }
+    
+        .visitor-navbar {
+            padding: 0.5rem;
+            height: 50px;
+        }
+    
+        .nav-main {
+            padding: 0 0.5rem;
+        }
+    
+        .visitor-chat-container {
+            padding: 0.5rem;
+        }
+    
+        .visitor-chat-input {
+            font-size: 16px;
+            padding: 0.6rem 0.7rem;
+        }
+    
+        .visitor-send-btn {
+            padding: 0.6rem;
+            min-width: 40px;
+        }
+    
+        .main-content-wrapper {
+            height: calc(100vh - 100px);
+        }
+    
+        .visitor-footer {
+            height: 50px;
+            font-size: 0.75rem;
+        }
+    
+        .user-message .visitor-message-content,
+        .bot-message .visitor-message-content {
+            max-width: 95%;
+            font-size: 0.8rem;
+            padding: 0.5rem 0.7rem;
+        }
+    
+        .quick-faq-btn {
+            font-size: 0.75rem;
+            padding: 0.4rem 0.5rem;
+            margin-bottom: 0.3rem;
+        }
+
+        .faq-suggestions-container {
+            margin-bottom: 0.4rem;
+            max-height: 140px;
+        }
+
+        .faq-suggestions-list {
+            max-height: 90px;
+        }
+
+        .faq-suggestion-item {
+            padding: 0.3rem 0.6rem;
+            font-size: 0.75rem;
+        }
+    
+        .toggle-switch {
+            width: 60px;
+            height: 24px;
+        }
+    
+        .toggle-handle {
+            width: 18px;
+            height: 18px;
+            top: 3px;
+            left: 3px;
+        }
+    
+        .toggle-input:checked + .toggle-label .toggle-handle {
+            left: calc(100% - 21px);
+        }
+    
+        .toggle-text-en,
+        .toggle-text-fi {
+            font-size: 10px;
+        }
+    
+        .toggle-text-en {
+            left: 8px;
+        }
+    
+        .toggle-text-fi {
+            right: 8px;
+        }
+    
+        .mobile-menu-content {
+            width: 100%;
+        }
+    
+        .mobile-menu-overlay {
+            top: 50px;
+        }
+    }
+    
+    /* Hamburger Animation */
+    .hamburger-btn.active span:nth-child(1) {
+        transform: translateY(11px) rotate(45deg);
+    }
+    
+    .hamburger-btn.active span:nth-child(2) {
+        opacity: 0;
+    }
+    
+    .hamburger-btn.active span:nth-child(3) {
+        transform: translateY(-11px) rotate(-45deg);
+    }
+    
+    .navbar-logo-link {
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+    }
+    
+    .navbar-logo-img {
+        height: 40px;
+        width: auto;
+        object-fit: contain;
+    }
+    
+    @media (max-width: 768px) {
+        .navbar-logo-img {
+            height: 32px;
+        }
+    }
+    </style>
+{% endblock %}
+
 {% block content %}
 <div class="visitor-bg">
     <!-- Navbar -->
@@ -59,7 +1069,7 @@
                 <ul class="faq-bullets list-unstyled mb-0">
                     {% for faq in faqs %}
                     <li>
-                        <a href="#" class="faq-bullet-link" onclick="askQuestion({{ faq.question|tojson }})">{{ faq.question }}</a>
+                        <a href="#" class="faq-bullet-link" >{{ faq.question }}</a>
                     </li>
                     {% endfor %}
                 </ul>
@@ -94,7 +1104,7 @@
                     <ul class="faq-bullets list-unstyled mb-0">
                         {% for faq in faqs %}
                         <li>
-                            <a href="#" class="faq-bullet-link" onclick="askQuestion({{ faq.question|tojson }})">{{ faq.question }}</a>
+                            <a href="#" class="faq-bullet-link" >{{ faq.question }}</a>
                         </li>
                         {% endfor %}
                     </ul>
@@ -112,7 +1122,7 @@
                         {% if faqs %}
                             {% for faq in faqs[:6] %}
                             <div class="col-12 col-md-6">
-                                <button class="quick-faq-btn w-100 text-center" onclick="askQuestion({{ faq.question|tojson }})">{{ faq.question }}</button>
+                                <button class="quick-faq-btn w-100 text-center" >{{ faq.question }}</button>
                             </div>
                             {% endfor %}
                         {% endif %}
@@ -121,10 +1131,28 @@
                     <!-- Chat Area -->
                     <div id="chatMessages" class="visitor-chat-messages"></div>
 
+                    <!-- FAQ Suggestions Container -->
+                    <div id="faqSuggestions" class="faq-suggestions-container" style="display: none;">
+                        <div class="faq-suggestions-header">
+                            <small class="text-muted">Similar questions:</small>
+                        </div>
+                        <div class="faq-suggestions-list" id="faqSuggestionsList">
+                            <!-- Suggestions will be populated here -->
+                        </div>
+                    </div>
+
                     <!-- Input -->
                     <form id="chatForm" class="visitor-chat-form d-flex align-items-center">
+                        <input type="hidden" id="message_history" value="{{ settings.get('message_history', 10) }}">
                         <input type="text" id="question" class="form-control visitor-chat-input" data-translate-placeholder="typeMessage" placeholder="Type your message here..." autocomplete="off">
                         <button type="submit" class="btn visitor-send-btn ms-2"><i class="fas fa-paper-plane"></i></button>
+                        <button id="downloadChatBtn" type="button"
+        class="btn visitor-send-btn bg-primary ms-2"
+        style="display: none;"
+        onclick="downloadChatAsPDF()">
+    <i class="fas fa-download"></i>
+</button>
+
                     </form>
                 </div>
             </div>
@@ -141,6 +1169,8 @@
 {% block extra_js %}
 <!-- Add language.js before other scripts -->
 <script src="{{ url_for('static', filename='js/languages.js') }}"></script>
+<!-- jsPDF library for PDF generation -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 if (performance.navigation.type === performance.navigation.TYPE_RELOAD) {
     // page is reloaded - clear history
@@ -175,6 +1205,12 @@ function askQuestion(question) {
         initialFaqs.style.display = 'none';
     }
     
+    // Show download button when chat starts
+    const downloadBtn = document.getElementById('downloadChatBtn');
+    if (downloadBtn) {
+        downloadBtn.style.display = 'flex';
+    }
+    
     // Add user message to chat immediately
     addMessage(question, 'user');
     addToHistory('question', question);
@@ -182,14 +1218,16 @@ function askQuestion(question) {
     // Show loading message
     const loadingId = addMessage(getTranslation('thinking', currentLanguage), 'bot', true);
     
+    // get message history from input
+    const messageHistory = document.getElementById('message_history').value;
     // Send request to server with language
-    fetch('/api/chat', {
+    fetch('{{ url_for("main.chat") }}', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
             question: question,
             language: currentLanguage ,
-            history: getRecentHistory(10)  // ✅ send last few turns
+            history: getRecentHistory(messageHistory)  // ✅ send last few turns
         })
     })
     .then(response => response.json())
@@ -198,7 +1236,12 @@ function askQuestion(question) {
         document.getElementById(loadingId).remove();
         
         // Add bot response with query ID
-        const messageId = addMessage(data.answer, 'bot');
+        // if sources_used is available, add it to the answer
+        let answer = data.answer;
+        if (data.sources_used) {
+            answer += `${data.sources_used}`;
+        }
+        const messageId = addMessage(answer, 'bot');
         addToHistory('answer', data.answer);
 
         
@@ -209,11 +1252,34 @@ function askQuestion(question) {
         }
         
         // Add sources if available
+        const usedFileNames = data.used_file_names;
         if (data.sources && data.sources.length > 0) {
             const sourcesHtml = data.sources.map(source =>
                 `<div class='source-item'><small class='text-muted'>${getTranslation('source', currentLanguage)} ${source.text}</small></div>`
             ).join('');
             addMessage(`<div class='sources'>${sourcesHtml}</div>`, 'bot');
+        }
+        
+        // Store used file names for PDF generation
+        console.log('API Response used_file_names:', usedFileNames); // Debug log
+        if (usedFileNames && usedFileNames.length > 0) {
+            // Find the message element that was just created
+            let messageElement = document.getElementById(messageId);
+            if (!messageElement) {
+                // Fallback: find the most recent bot message
+                const botMessages = document.querySelectorAll('.bot-message');
+                messageElement = botMessages[botMessages.length - 1];
+                console.log('Using fallback message element:', messageElement); // Debug log
+            }
+            
+            if (messageElement) {
+                messageElement.setAttribute('data-used-files', JSON.stringify(usedFileNames));
+                console.log('Stored used files on element:', messageElement.id, usedFileNames); // Debug log
+            } else {
+                console.log('No message element found for storing files'); // Debug log
+            }
+        } else {
+            console.log('No used files data found in API response:', usedFileNames); // Debug log
         }
         
         // Show notifications if needed
@@ -245,10 +1311,10 @@ function addMessage(text, sender, isTemporary = false) {
     if (sender === 'bot' && !isTemporary) {
         content += `
             <div class="feedback-buttons mt-2">
-                <button class="btn btn-sm btn-outline-success me-2" onclick="submitFeedback('${messageId}', 'like','${text}')">
+                <button class="btn btn-sm btn-outline-success me-2 feedback-btn" data-feedback="like" data-message-id="${messageId}">
                     <i class="fas fa-thumbs-up"></i> ${getTranslation('helpful', currentLanguage)}
                 </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="submitFeedback('${messageId}', 'dislike','${text}')">
+                <button class="btn btn-sm btn-outline-danger feedback-btn" data-feedback="dislike" data-message-id="${messageId}">
                     <i class="fas fa-thumbs-down"></i> ${getTranslation('notHelpful', currentLanguage)}
                 </button>
             </div>
@@ -256,6 +1322,20 @@ function addMessage(text, sender, isTemporary = false) {
     }
     
     messageDiv.innerHTML = content;
+    
+    // Add event listeners for feedback buttons
+    if (sender === 'bot' && !isTemporary) {
+        const feedbackButtons = messageDiv.querySelectorAll('.feedback-btn');
+        feedbackButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                const feedback = this.getAttribute('data-feedback');
+                const messageId = this.getAttribute('data-message-id');
+                const messageElement = document.getElementById(messageId);
+                const messageContent = messageElement.querySelector('.visitor-message-content').textContent;
+                submitFeedback(messageId, feedback, messageContent);
+            });
+        });
+    }
     
     // Get the chat messages container
     const chatMessages = document.getElementById('chatMessages');
@@ -289,7 +1369,7 @@ function submitFeedback(messageId, feedback, text) {
     }
     
     // Send feedback to server
-    fetch(`/api/chat/${queryId}/feedback`, {
+    fetch('{{ url_for("main.chat_feedback", query_id=0) }}'.replace(0, queryId), {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -341,6 +1421,105 @@ document.getElementById('question').addEventListener('keypress', function(e) {
         e.preventDefault();
         chatForm.dispatchEvent(new Event('submit'));
     }
+});
+
+// FAQ Search functionality
+let faqSearchEnabled = {{ 'true' if settings.get('faq_search_enabled', 'yes') == 'yes' else 'false' }};
+let searchTimeout = null;
+
+// Function to search FAQs
+function searchFAQs(query) {
+    if (!faqSearchEnabled || !query || query.length < 3) {
+        hideFAQSuggestions();
+        return;
+    }
+
+    fetch('{{ url_for("main.search_faqs") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query: query })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.suggestions && data.suggestions.length > 0) {
+            showFAQSuggestions(data.suggestions);
+        } else {
+            hideFAQSuggestions();
+        }
+    })
+    .catch(error => {
+        console.error('Error searching FAQs:', error);
+        hideFAQSuggestions();
+    });
+}
+
+// Function to show FAQ suggestions
+function showFAQSuggestions(suggestions) {
+    const container = document.getElementById('faqSuggestions');
+    const list = document.getElementById('faqSuggestionsList');
+    
+    if (!container || !list) return;
+    
+    // Clear existing suggestions
+    list.innerHTML = '';
+    
+    // Add each suggestion
+    suggestions.forEach(suggestion => {
+        const item = document.createElement('div');
+        item.className = 'faq-suggestion-item';
+        item.innerHTML = `<div class="suggestion-text">${suggestion.question}</div>`;
+        
+        // Add click handler
+        item.addEventListener('click', function() {
+            document.getElementById('question').value = suggestion.question;
+            hideFAQSuggestions();
+            // Optionally auto-submit
+            // askQuestion(suggestion.question);
+        });
+        
+        list.appendChild(item);
+    });
+    
+    // Show container
+    container.style.display = 'block';
+}
+
+// Function to hide FAQ suggestions
+function hideFAQSuggestions() {
+    const container = document.getElementById('faqSuggestions');
+    if (container) {
+        container.style.display = 'none';
+    }
+}
+
+// Add input event listener for FAQ search
+document.getElementById('question').addEventListener('input', function(e) {
+    const query = e.target.value.trim();
+    
+    // Clear existing timeout
+    if (searchTimeout) {
+        clearTimeout(searchTimeout);
+    }
+    
+    // Search immediately for better responsiveness
+    searchFAQs(query);
+});
+
+// Hide suggestions when clicking outside
+document.addEventListener('click', function(e) {
+    const suggestions = document.getElementById('faqSuggestions');
+    const input = document.getElementById('question');
+    
+    if (suggestions && !suggestions.contains(e.target) && !input.contains(e.target)) {
+        hideFAQSuggestions();
+    }
+});
+
+// Hide suggestions when form is submitted
+document.getElementById('chatForm').addEventListener('submit', function() {
+    hideFAQSuggestions();
 });
 
 // Add click handlers for FAQ links and buttons
@@ -400,743 +1579,322 @@ function getRecentHistory(n = 10) {
     let history = JSON.parse(sessionStorage.getItem('chatHistory') || '[]');
     return history.slice(-n); // last N messages
 }
+
+// Helper function to ensure text fits within PDF width
+function ensureTextFits(doc, text, maxWidth, margin) {
+    const textWidth = doc.getTextWidth(text);
+    if (textWidth > maxWidth) {
+        // Split text to fit
+        return doc.splitTextToSize(text, maxWidth);
+    }
+    return [text];
+}
+
+// Function to convert HTML to plain text with proper line breaks and formatting
+function convertHtmlToText(html) {
+    // Create a temporary div to parse HTML
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+    
+    // Handle <br> tags by replacing with newlines
+    const brElements = tempDiv.querySelectorAll('br');
+    brElements.forEach(br => {
+        br.replaceWith('\n');
+    });
+    
+    // Handle <b> and <strong> tags - we'll process these specially
+    const boldElements = tempDiv.querySelectorAll('b, strong');
+    boldElements.forEach(bold => {
+        bold.replaceWith(`**${bold.textContent}**`);
+    });
+    
+    // Remove <details> and <summary> tags completely (for "Show matched text")
+    // We don't want any of this content in the PDF
+    const detailsElements = tempDiv.querySelectorAll('details');
+    detailsElements.forEach(details => {
+        details.remove(); // Completely remove the details section
+    });
+    
+    // Skip <pre> tags (matched text content) - we only want file names
+    const preElements = tempDiv.querySelectorAll('pre');
+    preElements.forEach(pre => {
+        pre.remove(); // Remove the pre content entirely
+    });
+    
+    // Remove only the HTML elements that contain source information, not the text content
+    const sourcesUsedElements = tempDiv.querySelectorAll('*');
+    sourcesUsedElements.forEach(element => {
+        if (element.textContent && (
+            element.textContent.includes('View Original Text') ||
+            (element.textContent.includes('https://') && element.textContent.includes('View Original Text'))
+        )) {
+            element.remove();
+        }
+    });
+    
+    // Clean up the text content by removing source sections
+    const allText = tempDiv.textContent || '';
+    if (allText.includes('Sources used:')) {
+        // Split by "Sources used:" and keep only the first part
+        const parts = allText.split('Sources used:');
+        if (parts.length > 0) {
+            tempDiv.textContent = parts[0].trim();
+        }
+    }
+    
+    // Handle <a> tags - show URL and text
+    const linkElements = tempDiv.querySelectorAll('a');
+    linkElements.forEach(link => {
+        const href = link.getAttribute('href') || '';
+        const text = link.textContent;
+        link.replaceWith(`${text} (${href})`);
+    });
+    
+    // Handle <p> tags with proper spacing
+    const pElements = tempDiv.querySelectorAll('p');
+    pElements.forEach(p => {
+        p.replaceWith(p.textContent + '\n\n');
+    });
+    
+    // Handle <div> tags
+    const divElements = tempDiv.querySelectorAll('div');
+    divElements.forEach(div => {
+        if (div.textContent.trim()) {
+            div.replaceWith(div.textContent + '\n');
+        }
+    });
+    
+    // Get the final text
+    let text = tempDiv.textContent || tempDiv.innerText || '';
+    
+    // Clean up formatting
+    text = text.replace(/\s+/g, ' '); // Replace multiple spaces with single space
+    text = text.replace(/\n\s+/g, '\n'); // Remove spaces after newlines
+    text = text.replace(/\s+\n/g, '\n'); // Remove spaces before newlines
+    text = text.replace(/\n{3,}/g, '\n\n'); // Replace multiple newlines with double newlines
+    
+    return text.trim();
+}
+
+// Function to download chat as PDF
+function downloadChatAsPDF() {
+    try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        
+        // Get current date and time
+        const now = new Date();
+        const dateStr = now.toLocaleDateString();
+        const timeStr = now.toLocaleTimeString();
+        
+        // Get app name from settings or use default
+        const appName = '{{ settings.get("logo", "Guide GPT") }}';
+        
+        // Set up PDF content
+        let yPosition = 20;
+        const pageHeight = doc.internal.pageSize.height;
+        const margin = 20;
+        const maxWidth = doc.internal.pageSize.width - (margin * 2) - 10; // Extra 10px for safety
+        
+        // Add header
+        doc.setFontSize(18);
+        doc.setFont(undefined, 'bold');
+        doc.text(appName + ' - Chat History', margin, yPosition);
+        yPosition += 10;
+        
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'normal');
+        doc.text(`Generated on: ${dateStr} at ${timeStr}`, margin, yPosition);
+        yPosition += 15;
+        
+        // Add separator line
+        doc.setLineWidth(0.5);
+        doc.line(margin, yPosition, doc.internal.pageSize.width - margin, yPosition);
+        yPosition += 10;
+        
+        // Get chat messages from the DOM
+        const chatMessages = document.getElementById('chatMessages');
+        const messages = chatMessages.querySelectorAll('.visitor-message');
+        
+        if (messages.length === 0) {
+            doc.setFontSize(12);
+            doc.text('No chat messages found.', margin, yPosition);
+        } else {
+            // Process messages in reverse order (since they're displayed in reverse)
+            const messagesArray = Array.from(messages).reverse();
+            
+            messagesArray.forEach((messageElement, index) => {
+                // Check if we need a new page
+                if (yPosition > pageHeight - 50) {
+                    doc.addPage();
+                    yPosition = 20;
+                }
+                
+                const isUserMessage = messageElement.classList.contains('user-message');
+                const messageContent = messageElement.querySelector('.visitor-message-content');
+                
+                if (messageContent) {
+                    // Get HTML content and convert to plain text with proper line breaks
+                    const htmlContent = messageContent.innerHTML;
+                    const cleanText = convertHtmlToText(htmlContent);
+                    
+                    if (cleanText) {
+                        // Add sender label
+                        doc.setFontSize(10);
+                        doc.setFont(undefined, 'bold');
+                        const sender = isUserMessage ? 'You' : 'Assistant';
+                        doc.text(sender + ':', margin, yPosition);
+                        yPosition += 6;
+                        
+                        // Add message content
+                        doc.setFontSize(9);
+                        doc.setFont(undefined, 'normal');
+                        
+                        // Split text by line breaks and process each line
+                        const textLines = cleanText.split('\n');
+                        textLines.forEach(line => {
+                            if (line.trim()) {
+                                // Check if line contains bold markers (**text**)
+                                if (line.includes('**')) {
+                                    // Process bold text with proper wrapping
+                                    const parts = line.split(/(\*\*.*?\*\*)/g);
+                                    let currentLine = '';
+                                    
+                                    parts.forEach(part => {
+                                        if (part.startsWith('**') && part.endsWith('**')) {
+                                            // Bold text - add to current line
+                                            currentLine += part;
+                                        } else if (part.trim()) {
+                                            // Regular text - add to current line
+                                            currentLine += part;
+                                        }
+                                    });
+                                    
+                                    // Now wrap the complete line properly
+                                    const wrappedLines = doc.splitTextToSize(currentLine, maxWidth);
+                                    wrappedLines.forEach(wrappedLine => {
+                                        // Process each wrapped line for bold formatting
+                                        if (wrappedLine.includes('**')) {
+                                            const lineParts = wrappedLine.split(/(\*\*.*?\*\*)/g);
+                                            let currentX = margin + 5;
+                                            
+                                            lineParts.forEach(linePart => {
+                                                if (linePart.startsWith('**') && linePart.endsWith('**')) {
+                                                    // Bold text
+                                                    const boldText = linePart.slice(2, -2);
+                                                    doc.setFont(undefined, 'bold');
+                                                    const boldWidth = doc.getTextWidth(boldText);
+                                                    
+                                                    // Check if we need a new line
+                                                    if (currentX + boldWidth > doc.internal.pageSize.width - margin - 10) {
+                                                        yPosition += 4;
+                                                        currentX = margin + 5;
+                                                    }
+                                                    
+                                                    doc.text(boldText, currentX, yPosition);
+                                                    currentX += boldWidth;
+                                                    doc.setFont(undefined, 'normal');
+                                                } else if (linePart.trim()) {
+                                                    // Regular text
+                                                    const textWidth = doc.getTextWidth(linePart);
+                                                    
+                                                    // Check if we need a new line
+                                                    if (currentX + textWidth > doc.internal.pageSize.width - margin - 10) {
+                                                        yPosition += 4;
+                                                        currentX = margin + 5;
+                                                    }
+                                                    
+                                                    doc.text(linePart, currentX, yPosition);
+                                                    currentX += textWidth;
+                                                }
+                                            });
+                                            yPosition += 4;
+                                        } else {
+                                            // Regular wrapped line
+                                            doc.text(wrappedLine, margin + 5, yPosition);
+                                            yPosition += 4;
+                                        }
+                                    });
+                                } else {
+                                    // Regular line - ensure it fits and split if needed
+                                    const wrappedLines = ensureTextFits(doc, line.trim(), maxWidth, margin);
+                                    doc.text(wrappedLines, margin + 5, yPosition);
+                                    yPosition += (wrappedLines.length * 4);
+                                }
+                            } else {
+                                // Empty line - add some spacing
+                                yPosition += 4;
+                            }
+                        });
+                        
+                        // Add used file names if available (for bot messages)
+                        if (!isUserMessage) {
+                            const usedFilesData = messageElement.getAttribute('data-used-files');
+                            if (usedFilesData) {
+                                try {
+                                    const usedFiles = JSON.parse(usedFilesData);
+                                    if (usedFiles && usedFiles.length > 0) {
+                                        yPosition += 4;
+                                        
+                                        // Add comma-separated source names in bold
+                                        const sourcesText = usedFiles.join(', ');
+                                        doc.setFontSize(9);
+                                        doc.setFont(undefined, 'bold');
+                                        const wrappedLines = ensureTextFits(doc, sourcesText, maxWidth, margin);
+                                        doc.text(wrappedLines, margin + 5, yPosition);
+                                        yPosition += (wrappedLines.length * 4) + 4;
+                                    }
+                                } catch (e) {
+                                    console.log('Error parsing used files data:', e);
+                                }
+                            }
+                        }
+                        
+                        yPosition += 8;
+                        
+                        // Add separator between messages
+                        if (index < messagesArray.length - 1) {
+                            doc.setLineWidth(0.2);
+                            doc.setDrawColor(200, 200, 200);
+                            doc.line(margin, yPosition, doc.internal.pageSize.width - margin, yPosition);
+                            yPosition += 5;
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Add footer
+        const totalPages = doc.internal.getNumberOfPages();
+        for (let i = 1; i <= totalPages; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setFont(undefined, 'italic');
+            doc.text(`Page ${i} of ${totalPages}`, doc.internal.pageSize.width - 30, doc.internal.pageSize.height - 10);
+        }
+        
+        // Generate filename with timestamp
+        const timestamp = now.toISOString().slice(0, 19).replace(/:/g, '-');
+        const filename = `${appName.replace(/\s+/g, '_')}_Chat_${timestamp}.pdf`;
+        
+        // Download the PDF
+        doc.save(filename);
+        
+        // Show success message
+        if (typeof toastr !== 'undefined') {
+            toastr.success(getTranslation('chatDownloaded', currentLanguage) || 'Chat downloaded successfully!');
+        }
+        
+    } catch (error) {
+        console.error('Error generating PDF:', error);
+        if (typeof toastr !== 'undefined') {
+            toastr.error(getTranslation('downloadError', currentLanguage) || 'Error downloading chat. Please try again.');
+        } else {
+            alert('Error downloading chat. Please try again.');
+        }
+    }
+}
 </script>
 
-<style>
-html, body {
-    height: 100%;
-    margin: 0;
-    padding: 0;
-    overflow: hidden;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-}
 
-.visitor-bg {
-    height: 100vh;
-    background: linear-gradient(135deg, #f5f0ff 0%, #ede3f7 100%);
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-    overflow-x: hidden;
-}
-
-.visitor-navbar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #5b1fa6;
-    color: #fff;
-    padding: 1rem;
-    height: 60px;
-    flex-shrink: 0;
-    width: 100%;
-    position: sticky;
-    top: 0;
-    z-index: 1000;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-}
-
-.nav-main {
-    max-width: 1500px;
-    margin: 0 auto;
-    width: 100%;
-    padding: 0 1rem;
-}
-
-.navbar-logo {
-    font-weight: 700;
-    font-size: 1.5rem;
-    color: #fff;
-    letter-spacing: 1px;
-    transition: transform 0.3s ease;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 200px;
-}
-
-.navbar-logo:hover {
-    transform: scale(1.05);
-}
-
-.main-content-wrapper {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-height: 0;
-    max-width: 1400px;
-    margin: 1rem auto;
-    width: 100%;
-    box-shadow: 0 2px 16px rgba(91,31,166,0.08);
-    padding: 0 1rem;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(10px);
-    height: calc(100vh - 110px); /* Account for navbar and footer */
-}
-
-.visitor-sidebar {
-    background: #fff;
-    width: 25%;
-    min-width: 250px;
-    max-width: 350px;
-    border-right: 1px solid #eee;
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    overflow: hidden;
-}
-
-.sidebar-header {
-    background: #fff;
-    flex-shrink: 0;
-    padding: 1rem;
-}
-
-.sidebar-title {
-    font-weight: 600;
-    color: #5b1fa6;
-    letter-spacing: 1px;
-    font-size: 1.2rem;
-}
-
-.sidebar-divider {
-    border-color: #5b1fa6;
-    opacity: 0.2;
-    margin: 0.5rem 0;
-}
-
-.sidebar-faq-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 1rem;
-    min-height: 0;
-    height: 100%;
-}
-
-.faq-bullets {
-    padding-right: 0.5rem;
-}
-
-.faq-bullets li {
-    font-size: 0.95rem;
-    transition: transform 0.2s ease;
-    background-color: #f6f5f7;
-    border-radius: 8px;
-    margin-bottom: 2px;
-}
-
-.faq-bullet-link {
-    display: inline-block;
-    transition: all 0.3s ease;
-    color: #5b1fa6;
-    font-size: 0.95rem;
-    text-decoration: none;
-    padding: 0.5rem;
-    border-radius: 8px;
-    width: 100%;
-}
-
-.faq-bullet-link:hover {
-    color: #000000;
-    background: #f3f0fa;
-    transform: translateX(5px);
-}
-
-.visitor-main-bg {
-    background: #f8f5ff;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-height: 0;
-    border-radius: 12px;
-}
-
-.visitor-chat-container {
-    background: rgba(255, 255, 255, 0.8);
-    box-shadow: 0 2px 16px rgba(91,31,166,0.08);
-    padding: 1.5rem;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    border-radius: 12px;
-}
-
-.quick-faq-btn {
-    background: #f3f0fa;
-    border: none;
-    border-radius: 8px;
-    padding: 0.75rem 1rem;
-    margin-bottom: 0.5rem;
-    color: #333;
-    font-size: 0.95rem;
-    font-weight: 500;
-    transition: all 0.3s ease;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-}
-
-.quick-faq-btn:hover {
-    background: #e0d3f7;
-    color: #5b1fa6;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-}
-
-.visitor-chat-messages {
-    flex: 1;
-    overflow-y: auto;
-    margin-bottom: 1rem;
-    padding-right: 0.5rem;
-    min-height: 0;
-    display: flex;
-    flex-direction: column-reverse;
-    gap: 1rem;
-}
-
-.visitor-message {
-    margin-bottom: 0.75rem;
-    display: flex;
-    flex-direction: column;
-    animation: fadeIn 0.3s ease;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.user-message .visitor-message-content {
-    background: #d1aff3;
-    color: #000000;
-    align-self: flex-end;
-    border-radius: 12px 12px 0 12px;
-    padding: 0.75rem 1rem;
-    max-width: 80%;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.bot-message .visitor-message-content {
-    background: #f3f0fa;
-    color: #333;
-    align-self: flex-start;
-    border-radius: 12px 12px 12px 0;
-    padding: 0.75rem 1rem;
-    max-width: 80%;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.visitor-chat-form {
-    margin-top: auto;
-    width: 100%;
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-}
-
-.visitor-chat-input {
-    border-radius: 8px;
-    border: 1px solid #e0d3f7;
-    padding: 0.75rem 1rem;
-    font-size: 0.95rem;
-    background: #fff;
-    color: #333;
-    transition: all 0.3s ease;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-    flex: 1;
-}
-
-.visitor-chat-input:focus {
-    outline: none;
-    border-color: #5b1fa6;
-    box-shadow: 0 2px 8px rgba(91,31,166,0.1);
-}
-
-.visitor-send-btn {
-    background: #5b1fa6;
-    color: #fff;
-    border-radius: 8px;
-    font-size: 1.25rem;
-    padding: 0.5rem 1.25rem;
-    border: none;
-    transition: all 0.3s ease;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 45px;
-}
-
-.visitor-send-btn:hover {
-    background: #3d136e;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-}
-
-.visitor-footer {
-    background: #5b1fa6;
-    color: #fff;
-    font-size: 0.9rem;
-    letter-spacing: 1px;
-    height: 50px;
-    flex-shrink: 0;
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.nav-icons {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.visitor-info-btn {
-    background: transparent;
-    color: #fff;
-    border: none;
-    font-size: 1.25rem;
-    box-shadow: none;
-    transition: all 0.3s ease;
-    padding: 0.5rem;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-
-.nav-icon-text {
-    display: inline-block;
-}
-
-.visitor-info-btn:hover {
-    color: #e0d3f7;
-    background: rgba(255,255,255,0.1);
-    transform: scale(1.1);
-}
-
-/* Mobile Responsive Design */
-@media (max-width: 991.98px) {
-    .main-content-wrapper {
-        margin: 0.5rem;
-        padding: 0.5rem;
-    }
-
-    .visitor-sidebar {
-        width: 100%;
-        max-width: none;
-        min-width: unset;
-        position: fixed;
-        left: -100%;
-        top: 60px;
-        bottom: 50px;
-        z-index: 1000;
-        background: #fff;
-        transition: left 0.3s ease;
-    }
-
-    .visitor-sidebar.active {
-        left: 0;
-    }
-
-    .visitor-main-bg {
-        width: 100%;
-    }
-
-    .visitor-chat-container {
-        padding: 1rem;
-    }
-
-    .user-message .visitor-message-content,
-    .bot-message .visitor-message-content {
-        max-width: 90%;
-    }
-
-    .hamburger-btn {
-        display: flex !important;
-    }
-
-    .nav-icons {
-        display: none !important;
-    }
-}
-
-@media (max-width: 767.98px) {
-    .navbar-logo {
-        font-size: 1.2rem;
-        max-width: 150px;
-    }
-
-    .visitor-chat-form {
-        flex-direction: row;
-        gap: 0.5rem;
-        padding: 0.5rem;
-    }
-
-    .visitor-chat-input {
-        font-size: 0.9rem;
-        padding: 0.6rem 0.8rem;
-    }
-
-    .visitor-send-btn {
-        padding: 0.6rem;
-        font-size: 1.1rem;
-        min-width: 40px;
-    }
-
-    .main-content-wrapper {
-        margin: 0;
-        padding: 0;
-        border-radius: 0;
-    }
-
-    .visitor-main-bg {
-        border-radius: 0;
-    }
-
-    .visitor-chat-container {
-        border-radius: 0;
-    }
-}
-
-/* Add smooth scrolling */
-.visitor-chat-messages {
-    scroll-behavior: smooth;
-}
-
-/* Improve scrollbar appearance */
-.visitor-chat-messages::-webkit-scrollbar,
-.sidebar-faq-list::-webkit-scrollbar {
-    width: 6px;
-}
-
-.visitor-chat-messages::-webkit-scrollbar-track,
-.sidebar-faq-list::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 3px;
-}
-
-.visitor-chat-messages::-webkit-scrollbar-thumb,
-.sidebar-faq-list::-webkit-scrollbar-thumb {
-    background: #c1b1e0;
-    border-radius: 3px;
-}
-
-.visitor-chat-messages::-webkit-scrollbar-thumb:hover,
-.sidebar-faq-list::-webkit-scrollbar-thumb:hover {
-    background: #a391d0;
-}
-
-/* Loading animation */
-.temporary {
-    opacity: 0.7;
-    animation: pulse 1.5s infinite;
-}
-
-@keyframes pulse {
-    0% { opacity: 0.7; }
-    50% { opacity: 0.4; }
-    100% { opacity: 0.7; }
-}
-
-/* Feedback buttons styling */
-.feedback-buttons {
-    display: flex;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
-}
-
-.feedback-buttons .btn {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.875rem;
-    border-radius: 6px;
-    transition: all 0.3s ease;
-}
-
-.feedback-buttons .btn:hover {
-    transform: translateY(-2px);
-}
-
-/* Language toggle improvements */
-.language-toggle {
-    position: relative;
-    margin-right: 1rem;
-}
-
-.toggle-switch {
-    position: relative;
-    width: 80px;
-    height: 32px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 16px;
-    transition: all 0.3s ease;
-}
-
-.toggle-input {
-    display: none;
-}
-
-.toggle-label {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 16px;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    overflow: hidden;
-}
-
-.toggle-text-en,
-.toggle-text-fi {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 1px;
-    transition: all 0.3s ease;
-    color: #fff;
-    z-index: 1;
-}
-
-.toggle-text-en {
-    left: 12px;
-}
-
-.toggle-text-fi {
-    right: 12px;
-}
-
-.toggle-handle {
-    position: absolute;
-    top: 4px;
-    left: 4px;
-    width: 24px;
-    height: 24px;
-    background: #fff;
-    border-radius: 50%;
-    transition: all 0.3s ease;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-    z-index: 2;
-}
-
-.toggle-input:checked + .toggle-label {
-    background: rgba(255, 255, 255, 0.2);
-}
-
-.toggle-input:checked + .toggle-label .toggle-handle {
-    left: calc(100% - 28px);
-    background: #fff;
-}
-
-.toggle-input:checked + .toggle-label .toggle-text-en {
-    opacity: 0.5;
-}
-
-.toggle-input:checked + .toggle-label .toggle-text-fi {
-    opacity: 1;
-}
-
-.toggle-input:not(:checked) + .toggle-label .toggle-text-en {
-    opacity: 1;
-}
-
-.toggle-input:not(:checked) + .toggle-label .toggle-text-fi {
-    opacity: 0.5;
-}
-
-.toggle-label:hover {
-    background: rgba(255, 255, 255, 0.15);
-}
-
-.toggle-label:hover .toggle-handle {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-@media (max-width: 767.98px) {
-    .toggle-switch {
-        width: 70px;
-        height: 28px;
-    }
-
-    .toggle-handle {
-        width: 20px;
-        height: 20px;
-        top: 4px;
-        left: 4px;
-    }
-
-    .toggle-input:checked + .toggle-label .toggle-handle {
-        left: calc(100% - 24px);
-    }
-
-    .toggle-text-en,
-    .toggle-text-fi {
-        font-size: 11px;
-    }
-
-    .toggle-text-en {
-        left: 10px;
-    }
-
-    .toggle-text-fi {
-        right: 10px;
-    }
-}
-
-/* Hamburger Menu Styles */
-.hamburger-btn {
-    background: transparent;
-    border: none;
-    padding: 0.5rem;
-    cursor: pointer;
-    display: none;
-    flex-direction: column;
-    justify-content: space-between;
-    width: 30px;
-    height: 24px;
-    margin-left: 0.5rem;
-}
-
-.hamburger-btn span {
-    display: block;
-    width: 100%;
-    height: 2px;
-    background-color: #fff;
-    transition: all 0.3s ease;
-}
-
-.mobile-menu-overlay {
-    position: fixed;
-    top: 60px;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0, 0, 0, 0.5);
-    z-index: 1000;
-    display: none;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-}
-
-.mobile-menu-overlay.active {
-    display: block;
-    opacity: 1;
-}
-
-.mobile-menu-content {
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 280px;
-    height: 100%;
-    background: #fff;
-    display: flex;
-    flex-direction: column;
-    transform: translateX(100%);
-    transition: transform 0.3s ease;
-}
-
-.mobile-menu-overlay.active .mobile-menu-content {
-    transform: translateX(0);
-}
-
-.mobile-menu-header {
-    padding: 1rem;
-    background: #5b1fa6;
-    color: #fff;
-}
-
-.mobile-menu-faq-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 1rem;
-}
-
-.mobile-menu-footer {
-    padding: 1rem;
-    background: #f8f5ff;
-    display: flex;
-    justify-content: space-around;
-    border-top: 1px solid #e0d3f7;
-}
-
-.mobile-menu-footer .visitor-info-btn {
-    color: #5b1fa6;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.9rem;
-}
-
-.mobile-menu-footer .visitor-info-btn i {
-    font-size: 1.2rem;
-}
-
-@media (max-width: 767.98px) {
-    .hamburger-btn {
-        display: flex;
-    }
-
-    .nav-icons {
-        display: none;
-    }
-
-    .visitor-sidebar {
-        display: none;
-    }
-
-    .main-content-wrapper {
-        margin: 0;
-        padding: 0;
-        border-radius: 0;
-    }
-
-    .visitor-main-bg {
-        border-radius: 0;
-    }
-
-    .visitor-chat-container {
-        border-radius: 0;
-    }
-}
-
-/* Hamburger Animation */
-.hamburger-btn.active span:nth-child(1) {
-    transform: translateY(11px) rotate(45deg);
-}
-
-.hamburger-btn.active span:nth-child(2) {
-    opacity: 0;
-}
-
-.hamburger-btn.active span:nth-child(3) {
-    transform: translateY(-11px) rotate(-45deg);
-}
-
-.navbar-logo-link {
-    text-decoration: none;
-    display: flex;
-    align-items: center;
-}
-
-.navbar-logo-img {
-    height: 40px;
-    width: auto;
-    object-fit: contain;
-}
-
-@media (max-width: 768px) {
-    .navbar-logo-img {
-        height: 32px;
-    }
-}
-</style>
 {% endblock %} 

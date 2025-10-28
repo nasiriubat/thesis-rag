@@ -6,6 +6,9 @@ import openai
 from config import config
 from models import db
 
+from werkzeug.middleware.dispatcher import DispatcherMiddleware
+from werkzeug.middleware.proxy_fix import ProxyFix
+
 # Initialize login manager
 login_manager = LoginManager()
 login_manager.login_view = 'admin_login'
@@ -13,6 +16,10 @@ login_manager.login_view = 'admin_login'
 def create_app(config_name='default'):
     """Create and configure the Flask application."""
     app = Flask(__name__)
+    behindProxy = bool(os.getenv('BEHIND_PROXY', False))
+    if behindProxy == True:
+        # Apply ProxyFix
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
     
     # Load configuration
     app.config.from_object(config[config_name])
@@ -49,5 +56,11 @@ def create_app(config_name='default'):
 
 if __name__ == '__main__':
     port=int(os.getenv('PORT', 4001))
-    app = create_app('development')
-    app.run(host='0.0.0.0', port=port) 
+    basepath=os.getenv('BASEPATH', "/")
+    app = create_app(os.getenv('FLASK_ENV', 'production'))
+
+    application = DispatcherMiddleware(Flask('dummy'), {
+        basepath: app
+    })
+    from werkzeug.serving import run_simple
+    run_simple('0.0.0.0', port, application)

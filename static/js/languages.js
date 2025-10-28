@@ -15,6 +15,10 @@ const translations = {
         notHelpful: "Not Helpful",
         feedbackRecorded: "Feedback recorded",
         thankYouFeedback: "Thank you for your feedback!",
+        chatStarted: "Chat started",
+        downloadChat: "Download Chat",
+        chatDownloaded: "Chat downloaded successfully!",
+        downloadError: "Error downloading chat. Please try again.",
         
         // Error Messages
         errorOccurred: "An error occurred while processing your question",
@@ -45,6 +49,10 @@ const translations = {
         notHelpful: "Ei hyödyllinen",
         feedbackRecorded: "Palaute tallennettu",
         thankYouFeedback: "Kiitos palautteestasi!",
+        chatStarted: "Keskustelu aloitettu",
+        downloadChat: "Lataa Keskustelu",
+        chatDownloaded: "Keskustelu ladattu onnistuneesti!",
+        downloadError: "Virhe keskustelun lataamisessa. Yritä uudelleen.",
         
         // Error Messages
         errorOccurred: "Kysymyksen käsittelyssä tapahtui virhe",

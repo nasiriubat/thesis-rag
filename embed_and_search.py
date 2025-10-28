@@ -107,18 +107,18 @@ def calculate_relevance_score(chunk: str, query: str, base_score: float) -> floa
     final_score = (0.3 * base_score) + (0.3 * word_match_ratio) + phrase_bonus + consecutive_bonus + semantic_bonus
     
     # Debug output
-    print(f"Debug - Chunk: {chunk[:100]}...")
-    print(f"Debug - Score components: base={base_score:.3f}, word_match={word_match_ratio:.3f}, phrase_bonus={phrase_bonus}, consecutive_bonus={consecutive_bonus}, semantic_bonus={semantic_bonus}")
-    print(f"Debug - Final score: {final_score:.3f}")
+    # print(f"Debug - Chunk: {chunk[:100]}...")
+    # print(f"Debug - Score components: base={base_score:.3f}, word_match={word_match_ratio:.3f}, phrase_bonus={phrase_bonus}, consecutive_bonus={consecutive_bonus}, semantic_bonus={semantic_bonus}")
+    # print(f"Debug - Final score: {final_score:.3f}")
     
     return final_score
 
 def generate_and_store_embeddings(text: str) -> Optional[str]:
     file_id = str(uuid.uuid4())
-    print(f"Debug - Generating embeddings for text (first 100 chars): {text[:100]}...")
+    # print(f"Debug - Generating embeddings for text (first 100 chars): {text[:100]}...")
     
     chunks = split_into_chunks(text)
-    print(f"Debug - Split into {len(chunks)} chunks")
+    # print(f"Debug - Split into {len(chunks)} chunks")
     
     if not chunks:
         print("No valid chunks created from input text")
@@ -130,7 +130,7 @@ def generate_and_store_embeddings(text: str) -> Optional[str]:
         embedding = create_embedding(chunk)
         if embedding is not None:
             embeddings.append(embedding)
-            print(f"Debug - Generated embedding {i+1}/{len(chunks)}")
+            # print(f"Debug - Generated embedding {i+1}/{len(chunks)}")
         else:
             print(f"Debug - Failed to generate embedding for chunk {i+1}")
     
@@ -141,12 +141,12 @@ def generate_and_store_embeddings(text: str) -> Optional[str]:
     try:
         # Convert embeddings to numpy array
         embeddings_np = np.array(embeddings, dtype=np.float32)
-        print(f"Debug - Created numpy array of shape {embeddings_np.shape}")
+        # print(f"Debug - Created numpy array of shape {embeddings_np.shape}")
         
         # Save embeddings and chunks
         embeddings_file = EMBEDDINGS_FOLDER / f"{file_id}_embeddings.npy"
         np.save(embeddings_file, embeddings_np)
-        print(f"Debug - Saved embeddings to {embeddings_file}")
+        # print(f"Debug - Saved embeddings to {embeddings_file}")
         
         # Save chunks and metadata
         chunks_file = EMBEDDINGS_FOLDER / f"{file_id}_chunks.json"
@@ -155,7 +155,7 @@ def generate_and_store_embeddings(text: str) -> Optional[str]:
                 'chunks': chunks,
                 'file_id': file_id
             }, f, ensure_ascii=False)
-        print(f"Debug - Saved chunks to {chunks_file}")
+        # print(f"Debug - Saved chunks to {chunks_file}")
         
         return file_id
     except Exception as e:
@@ -174,7 +174,7 @@ def load_embeddings_and_chunks(file_id: str) -> tuple[Optional[np.ndarray], Opti
             data = json.load(f)
             chunks = data['chunks']
         
-        print(f"Debug - Loaded {len(chunks)} chunks for file_id: {file_id}")
+        # print(f"Debug - Loaded {len(chunks)} chunks for file_id: {file_id}")
         return embeddings, chunks
     except Exception as e:
         print(f"Error loading embeddings and chunks for {file_id}: {e}")
@@ -182,8 +182,8 @@ def load_embeddings_and_chunks(file_id: str) -> tuple[Optional[np.ndarray], Opti
 
 def search_across_indices(query: str, file_ids: List[str], top_k: int = 5) -> List[Dict]:
     try:
-        print(f"Debug - Searching for query: {query}")
-        print(f"Debug - Searching across {len(file_ids)} files")
+        # print(f"Debug - Searching for query: {query}")
+        # print(f"Debug - Searching across {len(file_ids)} files")
         
         # Create query embedding
         query_embedding = create_embedding(query)
@@ -220,7 +220,7 @@ def search_across_indices(query: str, file_ids: List[str], top_k: int = 5) -> Li
         
         # Sort all results by score and return top_k
         all_results.sort(key=lambda x: x["score"], reverse=True)
-        print(f"Debug - Found {len(all_results)} results above threshold")
+        # print(f"Debug - Found {len(all_results)} results above threshold")
         return all_results[:top_k]
     except Exception as e:
         print(f"Error searching: {e}")
