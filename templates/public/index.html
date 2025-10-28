@@ -373,6 +373,20 @@
             font-size: 0.85rem;
             padding: 0.6rem 0.8rem;
         }
+
+        .faq-suggestions-container {
+            margin-bottom: 0.75rem;
+            max-height: 180px;
+        }
+
+        .faq-suggestions-list {
+            max-height: 130px;
+        }
+
+        .faq-suggestion-item {
+            padding: 0.4rem 0.8rem;
+            font-size: 0.85rem;
+        }
     }
     
     @media (max-width: 767.98px) {
@@ -440,6 +454,20 @@
             font-size: 0.8rem;
             padding: 0.5rem 0.6rem;
             margin-bottom: 0.4rem;
+        }
+
+        .faq-suggestions-container {
+            margin-bottom: 0.5rem;
+            max-height: 160px;
+        }
+
+        .faq-suggestions-list {
+            max-height: 110px;
+        }
+
+        .faq-suggestion-item {
+            padding: 0.35rem 0.7rem;
+            font-size: 0.8rem;
         }
     
         .visitor-footer {
@@ -547,6 +575,80 @@
     .chat-info {
         color: #666;
         font-size: 0.8rem;
+    }
+
+    /* FAQ Suggestions Styling */
+    .faq-suggestions-container {
+        background: #fff;
+        border: 1px solid #e0d3f7;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 8px rgba(91,31,166,0.1);
+        max-height: 200px;
+        overflow: hidden;
+        transition: all 0.3s ease;
+    }
+
+    .faq-suggestions-header {
+        padding: 0.5rem 1rem;
+        background: var(--bot-message-color);
+        border-bottom: 1px solid #e0d3f7;
+        font-weight: 500;
+    }
+
+    .faq-suggestions-list {
+        max-height: 150px;
+        overflow-y: auto;
+        padding: 0.25rem 0;
+    }
+
+    .faq-suggestion-item {
+        padding: 0.5rem 1rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 0.9rem;
+        line-height: 1.4;
+        color: #333;
+        display: block;
+        text-decoration: none;
+    }
+
+    .faq-suggestion-item:hover {
+        background: var(--bot-message-color);
+        color: var(--accent-color);
+        transform: translateX(2px);
+    }
+
+    .faq-suggestion-item:last-child {
+        border-bottom: none;
+    }
+
+    .faq-suggestion-item .suggestion-text {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* FAQ Suggestions Scrollbar */
+    .faq-suggestions-list::-webkit-scrollbar {
+        width: 4px;
+    }
+
+    .faq-suggestions-list::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 2px;
+    }
+
+    .faq-suggestions-list::-webkit-scrollbar-thumb {
+        background: #c1b1e0;
+        border-radius: 2px;
+    }
+
+    .faq-suggestions-list::-webkit-scrollbar-thumb:hover {
+        background: #a391d0;
     }
 
     /* Language toggle improvements */
@@ -822,6 +924,20 @@
             padding: 0.4rem 0.5rem;
             margin-bottom: 0.3rem;
         }
+
+        .faq-suggestions-container {
+            margin-bottom: 0.4rem;
+            max-height: 140px;
+        }
+
+        .faq-suggestions-list {
+            max-height: 90px;
+        }
+
+        .faq-suggestion-item {
+            padding: 0.3rem 0.6rem;
+            font-size: 0.75rem;
+        }
     
         .toggle-switch {
             width: 60px;
@@ -1014,6 +1130,16 @@
 
                     <!-- Chat Area -->
                     <div id="chatMessages" class="visitor-chat-messages"></div>
+
+                    <!-- FAQ Suggestions Container -->
+                    <div id="faqSuggestions" class="faq-suggestions-container" style="display: none;">
+                        <div class="faq-suggestions-header">
+                            <small class="text-muted">Similar questions:</small>
+                        </div>
+                        <div class="faq-suggestions-list" id="faqSuggestionsList">
+                            <!-- Suggestions will be populated here -->
+                        </div>
+                    </div>
 
                     <!-- Input -->
                     <form id="chatForm" class="visitor-chat-form d-flex align-items-center">
@@ -1295,6 +1421,105 @@ document.getElementById('question').addEventListener('keypress', function(e) {
         e.preventDefault();
         chatForm.dispatchEvent(new Event('submit'));
     }
+});
+
+// FAQ Search functionality
+let faqSearchEnabled = {{ 'true' if settings.get('faq_search_enabled', 'yes') == 'yes' else 'false' }};
+let searchTimeout = null;
+
+// Function to search FAQs
+function searchFAQs(query) {
+    if (!faqSearchEnabled || !query || query.length < 3) {
+        hideFAQSuggestions();
+        return;
+    }
+
+    fetch('{{ url_for("main.search_faqs") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query: query })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.suggestions && data.suggestions.length > 0) {
+            showFAQSuggestions(data.suggestions);
+        } else {
+            hideFAQSuggestions();
+        }
+    })
+    .catch(error => {
+        console.error('Error searching FAQs:', error);
+        hideFAQSuggestions();
+    });
+}
+
+// Function to show FAQ suggestions
+function showFAQSuggestions(suggestions) {
+    const container = document.getElementById('faqSuggestions');
+    const list = document.getElementById('faqSuggestionsList');
+    
+    if (!container || !list) return;
+    
+    // Clear existing suggestions
+    list.innerHTML = '';
+    
+    // Add each suggestion
+    suggestions.forEach(suggestion => {
+        const item = document.createElement('div');
+        item.className = 'faq-suggestion-item';
+        item.innerHTML = `<div class="suggestion-text">${suggestion.question}</div>`;
+        
+        // Add click handler
+        item.addEventListener('click', function() {
+            document.getElementById('question').value = suggestion.question;
+            hideFAQSuggestions();
+            // Optionally auto-submit
+            // askQuestion(suggestion.question);
+        });
+        
+        list.appendChild(item);
+    });
+    
+    // Show container
+    container.style.display = 'block';
+}
+
+// Function to hide FAQ suggestions
+function hideFAQSuggestions() {
+    const container = document.getElementById('faqSuggestions');
+    if (container) {
+        container.style.display = 'none';
+    }
+}
+
+// Add input event listener for FAQ search
+document.getElementById('question').addEventListener('input', function(e) {
+    const query = e.target.value.trim();
+    
+    // Clear existing timeout
+    if (searchTimeout) {
+        clearTimeout(searchTimeout);
+    }
+    
+    // Search immediately for better responsiveness
+    searchFAQs(query);
+});
+
+// Hide suggestions when clicking outside
+document.addEventListener('click', function(e) {
+    const suggestions = document.getElementById('faqSuggestions');
+    const input = document.getElementById('question');
+    
+    if (suggestions && !suggestions.contains(e.target) && !input.contains(e.target)) {
+        hideFAQSuggestions();
+    }
+});
+
+// Hide suggestions when form is submitted
+document.getElementById('chatForm').addEventListener('submit', function() {
+    hideFAQSuggestions();
 });
 
 // Add click handlers for FAQ links and buttons

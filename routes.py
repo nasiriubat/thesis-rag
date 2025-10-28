@@ -394,6 +394,7 @@ def admin_settings():
                 "contact": request.form.get("contact"),
                 "openai_model": request.form.get("openai_model"),
                 "show_matched_text": request.form.get("show_matched_text", "yes"),
+                "faq_search_enabled": request.form.get("faq_search_enabled", "yes"),
                 "theme_primary_color": request.form.get("theme_primary_color", "#5b1fa6"),
                 "theme_secondary_color": request.form.get("theme_secondary_color", "#d1aff3"),
                 "theme_bot_message_color": request.form.get("theme_bot_message_color", "#f3f0fa"),
@@ -1201,6 +1202,64 @@ def api_delete_all_queries():
         db.session.rollback()
         # print(f"Error deleting all queries: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@main.route("/api/search-faqs", methods=["POST"])
+def search_faqs():
+    """Search FAQs based on text matching for real-time suggestions."""
+    try:
+        data = request.get_json()
+        query = data.get("query", "").strip()
+        
+        if not query or len(query) < 3:
+            return jsonify({"suggestions": []})
+        
+        # Get all FAQs
+        faqs = FAQ.query.all()
+        if not faqs:
+            return jsonify({"suggestions": []})
+        
+        # Text matching algorithm
+        query_words = set(query.lower().split())
+        scored_faqs = []
+        
+        for faq in faqs:
+            faq_words = set(faq.question.lower().split())
+            
+            # Calculate word matches
+            matching_words = query_words.intersection(faq_words)
+            match_count = len(matching_words)
+            total_query_words = len(query_words)
+            
+            if match_count == 0:
+                continue
+                
+            # Calculate match percentage
+            match_percentage = (match_count / total_query_words) * 100
+            
+            # Bonus for exact phrase match
+            exact_match_bonus = 0
+            if query.lower() in faq.question.lower():
+                exact_match_bonus = 20
+            
+            # Final score
+            score = match_percentage + exact_match_bonus
+            
+            scored_faqs.append({
+                "id": faq.id,
+                "question": faq.question,
+                "score": score
+            })
+        
+        # Sort by score (highest first) and return top 5
+        scored_faqs.sort(key=lambda x: x["score"], reverse=True)
+        suggestions = scored_faqs[:5]
+        
+        return jsonify({"suggestions": suggestions})
+        
+    except Exception as e:
+        print(f"Error in search_faqs: {str(e)}")
+        return jsonify({"suggestions": []}), 500
 
 
 @main.route("/api/chat/<int:query_id>/feedback", methods=["POST"])
