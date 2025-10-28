@@ -8,7 +8,8 @@ load_dotenv()
 class Config:
     """Base configuration class."""
     SECRET_KEY = os.getenv('SECRET_KEY', 'your-secret-key-here')
-    SQLALCHEMY_DATABASE_URI = 'sqlite:///chatbot.db'
+    DATA_PATH = os.getenv('DATA_PATH', 'sqlite://')
+    SQLALCHEMY_DATABASE_URI = f'{DATA_PATH}/chatbot.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
     APP_NAME = os.getenv('APP_NAME', 'ChatBot')
@@ -45,4 +46,4 @@ config = {
     'production': ProductionConfig,
     'testing': TestingConfig,
     'default': DevelopmentConfig
-} 
+}

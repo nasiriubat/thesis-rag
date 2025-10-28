@@ -12,7 +12,7 @@ from flask import (
 from sqlalchemy import func
 from flask_login import login_user, login_required, logout_user, current_user
 from models import db, User, Role, FAQ, File, Query, Settings, NewQuestion
-from urllib.parse import urlparse
+from urllib.parse import urlparse,parse_qs
 
 from werkzeug.security import generate_password_hash
 from datetime import datetime
@@ -31,8 +31,6 @@ import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 import re
-from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_transcript_api.formatters import TextFormatter
 from pathlib import Path
 from werkzeug.utils import secure_filename
 import time
@@ -150,8 +148,12 @@ def chat():
 
         if not file_ids:
             return handle_no_content(question, language)
-
-        results = search_across_indices(question, file_ids, top_k=3)
+        # get chunk number from settings
+        chunk_number = Settings.query.filter_by(key="chunk_number").first()
+        chunk_number = chunk_number.value if chunk_number and chunk_number.value else 3
+        # make it int
+        chunk_number = int(chunk_number)
+        results = search_across_indices(question, file_ids, top_k=chunk_number)
         if not results and not history_text:
             # Save query with answer_found=False and return no content message
             message = {
@@ -212,6 +214,7 @@ def chat():
         )
 
         answer = response.choices[0].message.content
+        used_file_names = []  # For PDF generation - just clean file names
         if used_files:
             files_list = []
             for f in used_files:
@@ -225,6 +228,7 @@ def chat():
                         parts = parsed.path.strip("/").split("/")
                         display += f"/{parts[0]}"
                     html = f"- <a href='{fname}' target='_blank'>{display}</a>"
+                    used_file_names.append(fname)
                     if show_matched_text == "yes":
                         html += (
                             f"<details><summary style='cursor:pointer; color:gray;'>View Original Text</summary>"
@@ -233,6 +237,7 @@ def chat():
                     files_list.append(html)
                 else:
                     html = f"- {fname}"
+                    used_file_names.append(fname)
                     if show_matched_text == "yes":
                         html += (
                             f"<details><summary style='cursor:pointer; color:gray;'>View Original Text</summary>"
@@ -241,12 +246,12 @@ def chat():
                     files_list.append(html)
 
             files_html = "<br>".join(files_list)
-            answer = f"{answer}<br><br><b>Sources used:</b><br>{files_html}"
+            sources_used = f"<br><br><b>Sources used:</b><br>{files_html}"
 
         # 6. Save query with the generated answer
         query = save_query(answer=answer)
-
-        return jsonify({"answer": answer, "type": "success", "query_id": query.id})
+        # PRINT clean_file_names
+        return jsonify({"answer": answer,"sources_used":sources_used, "used_file_names":used_file_names, "type": "success", "query_id": query.id})
 
     except Exception as e:
         print(f"Error in chat route: {str(e)}")
@@ -358,17 +363,15 @@ def admin_faqs():
 @main.route("/admin/files")
 @login_required
 def admin_files():
-    files = File.query.all()
     settings = {s.key: s.value for s in Settings.query.all()}
-    return render_template("admin/files.html", files=files, settings=settings)
+    return render_template("admin/files.html", files=[], settings=settings)
 
 
 @main.route("/admin/queries")
 @login_required
 def admin_queries():
-    queries = Query.query.all()
     settings = {s.key: s.value for s in Settings.query.all()}
-    return render_template("admin/queries.html", queries=queries, settings=settings)
+    return render_template("admin/queries.html", queries=[], settings=settings)
 
 
 @main.route("/admin/settings", methods=["GET", "POST"])
@@ -382,12 +385,21 @@ def admin_settings():
 
             settings_to_update = {
                 "logo": request.form.get("logo"),
+                "chunk_number": request.form.get("chunk_number"),
                 "openai_key": request.form.get("openai_key"),
                 "copyright": request.form.get("copyright"),
                 "about": request.form.get("about"),
                 "contact": request.form.get("contact"),
                 "openai_model": request.form.get("openai_model"),
                 "show_matched_text": request.form.get("show_matched_text", "yes"),
+                "faq_search_enabled": request.form.get("faq_search_enabled", "yes"),
+                "theme_primary_color": request.form.get("theme_primary_color", "#5b1fa6"),
+                "theme_secondary_color": request.form.get("theme_secondary_color", "#d1aff3"),
+                "theme_bot_message_color": request.form.get("theme_bot_message_color", "#f3f0fa"),
+                "theme_background_start": request.form.get("theme_background_start", "#f5f0ff"),
+                "theme_background_end": request.form.get("theme_background_end", "#ede3f7"),
+                "theme_accent_color": request.form.get("theme_accent_color", "#5b1fa6"),
+                "message_history": request.form.get("message_history", 10),
             }
 
             # Handle logo file upload
@@ -421,6 +433,10 @@ def admin_settings():
                 settings_to_update["favicon_file"] = filename
 
             for key, value in settings_to_update.items():
+                # Skip None values to avoid constraint errors
+                if value is None:
+                    continue
+                    
                 setting = Settings.query.filter_by(key=key).first()
                 if setting:
                     setting.value = value
@@ -674,7 +690,7 @@ def extract_text_from_file(file_or_url):
                 parsed_url = urlparse(file_or_url)
                 netloc = parsed_url.netloc.replace("www.", "").lower()
                 if netloc in ["youtube.com", "youtu.be"]:
-                    return extract_youtube_text(file_or_url)
+                    raise ValueError("YouTube URLs are not supported. Please use other types of URLs like web pages, PDFs, or documents.")
                 return extract_webpage_text(file_or_url)
             else:
                 return file_or_url.strip()  # raw text (e.g., from textarea)
@@ -703,55 +719,6 @@ def extract_text_from_file(file_or_url):
     except Exception as e:
         print(f"Error extracting text: {str(e)}")
         return None
-
-
-def extract_youtube_text(url):
-    """Extract text from YouTube video using transcript."""
-    try:
-        # Extract video ID from URL
-        video_id = None
-
-        # Handle different YouTube URL formats
-        if "youtube.com" in url:
-            # Handle standard YouTube URLs
-            if "v=" in url:
-                video_id = re.search(r"v=([^&]+)", url).group(1)
-            # Handle YouTube Shorts
-            elif "/shorts/" in url:
-                video_id = url.split("/shorts/")[1].split("?")[0]
-            # Handle YouTube channel URLs
-            elif "/channel/" in url or "/user/" in url:
-                return None
-        elif "youtu.be" in url:
-            # Handle shortened YouTube URLs
-            video_id = url.split("/")[-1].split("?")[0]
-
-        if not video_id:
-            print(f"Could not extract video ID from URL: {url}")
-            return None
-
-        try:
-            # Try to get transcript
-            transcript = YouTubeTranscriptApi.get_transcript(video_id)
-            formatter = TextFormatter()
-            return formatter.format_transcript(transcript)
-        except Exception as e:
-            print(f"Error getting transcript for video {video_id}: {str(e)}")
-            # Try to get transcript in a different language if available
-            try:
-                transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-                # Try to get transcript in English or any available language
-                transcript = transcript_list.find_transcript(["en"]).fetch()
-                formatter = TextFormatter()
-                return formatter.format_transcript(transcript)
-            except Exception as e2:
-                print(f"Error getting alternative transcript: {str(e2)}")
-                return None
-
-    except Exception as e:
-        print(f"Error extracting YouTube transcript: {str(e)}")
-        return None
-
 
 def generate_filename(source, content=None):
     """Generate a unique filename based on the source type and content."""
@@ -851,9 +818,9 @@ def check_duplicate_url(url):
 def api_upload_file():
     try:
         upload_type = request.form.get("uploadType")
-        print("Upload Type:", upload_type)
-        print("Request form data:", request.form)
-        print("Request files:", request.files)
+        # print("Upload Type:", upload_type)
+        # print("Request form data:", request.form)
+        # print("Request files:", request.files)
 
         if upload_type == "file":
             files = request.files.getlist("file")
@@ -940,7 +907,7 @@ def api_upload_file():
                     400,
                 )
 
-            print(f"Processing URL: {url}")
+            # print(f"Processing URL: {url}")
             text = extract_text_from_file(url)
             if not text:
                 return (
@@ -1031,7 +998,7 @@ def delete_associated_files(file_identifier):
         for file_path in file_paths.values():
             if os.path.exists(file_path):
                 os.remove(file_path)
-                print(f"Deleted associated file: {file_path}")
+                # print(f"Deleted associated file: {file_path}")
     except Exception as e:
         print(f"Error deleting associated files: {str(e)}")
 
@@ -1062,13 +1029,33 @@ def api_manage_faq(faq_id):
 
             except Exception as e:
                 db.session.rollback()
-                print(f"Error generating embeddings: {e}")
+                # print(f"Error generating embeddings: {e}")
                 return jsonify({"error": str(e)}), 500
 
     except Exception as e:
         db.session.rollback()
-        print(f"Error managing FAQ: {e}")
+        # print(f"Error managing FAQ: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@main.route("/api/faq/bulk-delete", methods=["DELETE"])
+@login_required
+def api_bulk_delete_faqs():
+    try:
+        # Delete all FAQs
+        deleted_count = FAQ.query.delete()
+        db.session.commit()
+        
+        return jsonify({
+            "type": "success", 
+            "message": f"Successfully deleted all {deleted_count} FAQs"
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            "type": "error", 
+            "message": f"Failed to delete FAQs: {str(e)}"
+        }), 500
 
 
 @main.route("/api/file/<int:id>", methods=["DELETE"])
@@ -1094,6 +1081,31 @@ def api_delete_file(id):
         return jsonify({"message": str(e), "type": "error"}), 500
 
 
+@main.route("/api/file/bulk-delete", methods=["DELETE"])
+@login_required
+def api_bulk_delete_files():
+    try:
+        # Get all files to delete associated data
+        files = File.query.all()
+        for file in files:
+            delete_associated_files(file.file_identifier)
+        
+        # Delete all files
+        deleted_count = File.query.delete()
+        db.session.commit()
+        
+        return jsonify({
+            "type": "success", 
+            "message": f"Successfully deleted all {deleted_count} files and associated data"
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            "type": "error", 
+            "message": f"Failed to delete files: {str(e)}"
+        }), 500
+
+
 @main.route("/api/query/<int:id>", methods=["DELETE"])
 @login_required
 def api_delete_query(id):
@@ -1104,6 +1116,26 @@ def api_delete_query(id):
         return jsonify({"message": "Query deleted successfully", "type": "success"})
     except Exception as e:
         return jsonify({"message": str(e), "type": "error"}), 500
+
+
+@main.route("/api/queries/bulk-delete", methods=["DELETE"])
+@login_required
+def api_bulk_delete_queries():
+    try:
+        # Delete all queries
+        deleted_count = Query.query.delete()
+        db.session.commit()
+        
+        return jsonify({
+            "type": "success", 
+            "message": f"Successfully deleted all {deleted_count} queries"
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            "type": "error", 
+            "message": f"Failed to delete queries: {str(e)}"
+        }), 500
 
 
 @main.route("/api/new-question/<int:id>", methods=["DELETE"])
@@ -1130,6 +1162,32 @@ def api_delete_new_question(id):
         return jsonify({"message": str(e), "type": "error"}), 500
 
 
+@main.route("/api/new-questions/bulk-delete", methods=["DELETE"])
+@login_required
+def api_bulk_delete_new_questions():
+    try:
+        # Get all new questions to delete associated files
+        questions = NewQuestion.query.all()
+        for question in questions:
+            file_identifier = f"new_question_{question.id}"
+            delete_associated_files(file_identifier)
+        
+        # Delete all new questions
+        deleted_count = NewQuestion.query.delete()
+        db.session.commit()
+        
+        return jsonify({
+            "type": "success", 
+            "message": f"Successfully deleted all {deleted_count} questions and associated files"
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            "type": "error", 
+            "message": f"Failed to delete questions: {str(e)}"
+        }), 500
+
+
 @main.route("/api/queries/delete-all", methods=["DELETE"])
 @login_required
 def api_delete_all_queries():
@@ -1140,7 +1198,200 @@ def api_delete_all_queries():
         return jsonify({"message": "All queries deleted successfully"})
     except Exception as e:
         db.session.rollback()
-        print(f"Error deleting all queries: {e}")
+        # print(f"Error deleting all queries: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@main.route("/api/search-faqs", methods=["POST"])
+def search_faqs():
+    """Search FAQs based on text matching for real-time suggestions."""
+    try:
+        data = request.get_json()
+        query = data.get("query", "").strip()
+        
+        if not query or len(query) < 3:
+            return jsonify({"suggestions": []})
+        
+        # Get all FAQs
+        faqs = FAQ.query.all()
+        if not faqs:
+            return jsonify({"suggestions": []})
+        
+        # Text matching algorithm
+        query_words = set(query.lower().split())
+        scored_faqs = []
+        
+        for faq in faqs:
+            faq_words = set(faq.question.lower().split())
+            
+            # Calculate word matches
+            matching_words = query_words.intersection(faq_words)
+            match_count = len(matching_words)
+            total_query_words = len(query_words)
+            
+            if match_count == 0:
+                continue
+                
+            # Calculate match percentage
+            match_percentage = (match_count / total_query_words) * 100
+            
+            # Bonus for exact phrase match
+            exact_match_bonus = 0
+            if query.lower() in faq.question.lower():
+                exact_match_bonus = 20
+            
+            # Final score
+            score = match_percentage + exact_match_bonus
+            
+            scored_faqs.append({
+                "id": faq.id,
+                "question": faq.question,
+                "score": score
+            })
+        
+        # Sort by score (highest first) and return top 5
+        scored_faqs.sort(key=lambda x: x["score"], reverse=True)
+        suggestions = scored_faqs[:5]
+        
+        return jsonify({"suggestions": suggestions})
+        
+    except Exception as e:
+        print(f"Error in search_faqs: {str(e)}")
+        return jsonify({"suggestions": []}), 500
+
+
+@main.route("/api/admin/files/paginated", methods=["GET"])
+@login_required
+def api_files_paginated():
+    """Get paginated files data for admin panel."""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        search = request.args.get('search', '', type=str)
+        order_by = request.args.get('order_by', 'id', type=str)
+        order_dir = request.args.get('order_dir', 'desc', type=str)
+        
+        # Validate per_page to prevent abuse
+        per_page = min(per_page, 100)
+        
+        # Build query with search filter
+        query = File.query.join(User, File.user_id == User.id)
+        
+        if search:
+            query = query.filter(
+                File.original_filename.ilike(f'%{search}%') |
+                File.text.ilike(f'%{search}%')
+            )
+        
+        # Apply ordering
+        if hasattr(File, order_by):
+            if order_dir == 'desc':
+                query = query.order_by(getattr(File, order_by).desc())
+            else:
+                query = query.order_by(getattr(File, order_by).asc())
+        else:
+            # Default ordering
+            query = query.order_by(File.id.desc())
+        
+        # Apply pagination
+        pagination = query.paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False
+        )
+        
+        # Prepare data with truncated text
+        files_data = []
+        for file in pagination.items:
+            files_data.append({
+                'id': file.id,
+                'original_filename': file.original_filename,
+                'text': file.text[:100] + '...' if len(file.text) > 100 else file.text,
+                'user_name': file.user.name if file.user else 'Unknown',
+                'created_at': file.created_at.strftime('%Y-%m-%d %H:%M'),
+                'file_identifier': file.file_identifier
+            })
+        
+        return jsonify({
+            'data': files_data,
+            'total': pagination.total,
+            'pages': pagination.pages,
+            'current_page': pagination.page,
+            'per_page': pagination.per_page,
+            'has_prev': pagination.has_prev,
+            'has_next': pagination.has_next
+        })
+        
+    except Exception as e:
+        print(f"Error in api_files_paginated: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@main.route("/api/admin/queries/paginated", methods=["GET"])
+@login_required
+def api_queries_paginated():
+    """Get paginated queries data for admin panel."""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        search = request.args.get('search', '', type=str)
+        order_by = request.args.get('order_by', 'id', type=str)
+        order_dir = request.args.get('order_dir', 'desc', type=str)
+        
+        # Validate per_page to prevent abuse
+        per_page = min(per_page, 100)
+        
+        # Build query with search filter
+        query = Query.query
+        
+        if search:
+            query = query.filter(
+                Query.question.ilike(f'%{search}%') |
+                Query.answer.ilike(f'%{search}%')
+            )
+        
+        # Apply ordering
+        if hasattr(Query, order_by):
+            if order_dir == 'desc':
+                query = query.order_by(getattr(Query, order_by).desc())
+            else:
+                query = query.order_by(getattr(Query, order_by).asc())
+        else:
+            # Default ordering
+            query = query.order_by(Query.id.desc())
+        
+        # Apply pagination
+        pagination = query.paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False
+        )
+        
+        # Prepare data
+        queries_data = []
+        for query in pagination.items:
+            queries_data.append({
+                'id': query.id,
+                'question': query.question[:100] + '...' if len(query.question) > 100 else query.question,
+                'answer': query.answer[:100] + '...' if query.answer and len(query.answer) > 100 else query.answer,
+                'answer_found': query.answer_found,
+                'happy': query.happy,
+                'language': query.language,
+                'created_at': query.created_at.strftime('%Y-%m-%d %H:%M')
+            })
+        
+        return jsonify({
+            'data': queries_data,
+            'total': pagination.total,
+            'pages': pagination.pages,
+            'current_page': pagination.page,
+            'per_page': pagination.per_page,
+            'has_prev': pagination.has_prev,
+            'has_next': pagination.has_next
+        })
+        
+    except Exception as e:
+        print(f"Error in api_queries_paginated: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 
@@ -1181,7 +1432,7 @@ def regenerate_missing_embeddings():
             file_identifier = generate_and_store_embeddings(file.text)
             if file_identifier:
                 file.file_identifier = file_identifier
-                print(f"Regenerated embedding for file {file.id}")
+                # print(f"Regenerated embedding for file {file.id}")
 
         # Check FAQs
         faqs = FAQ.query.filter_by(embedding=None).all()
@@ -1190,7 +1441,7 @@ def regenerate_missing_embeddings():
             file_identifier = generate_and_store_embeddings(combined_text)
             if file_identifier:
                 faq.embedding = json.dumps(file_identifier)
-                print(f"Regenerated embedding for FAQ {faq.id}")
+                # print(f"Regenerated embedding for FAQ {faq.id}")
 
         db.session.commit()
         return True
@@ -1264,14 +1515,15 @@ def api_get_query(id):
     except Exception as e:
         return jsonify({"type": "error", "message": str(e)}), 500
 
-def extract_webpage_text(url, headless=True, wait_time=3):
+def extract_webpage_text(url, headless=True, wait_time=0, enable_javascript=True):
     """
     Extract clean text from webpage using Selenium WebDriver.
     
     Args:
         url (str): The URL to extract text from
         headless (bool): Run browser in headless mode (default: True)
-        wait_time (int): Time to wait for dynamic content to load (default: 3 seconds)
+        wait_time (int): Time to wait for dynamic content to load (default: 5 seconds)
+        enable_javascript (bool): Enable JavaScript for dynamic content (default: True)
     
     Returns:
         str: Extracted clean text content, or None if extraction fails
@@ -1287,7 +1539,7 @@ def extract_webpage_text(url, headless=True, wait_time=3):
             return None
         
         # Extract content using Selenium
-        result = extract_with_selenium(url, headless, wait_time)
+        result = extract_with_selenium(url, headless, wait_time, enable_javascript)
         
         if result:
             return result
@@ -1299,7 +1551,7 @@ def extract_webpage_text(url, headless=True, wait_time=3):
         print(f"Error extracting webpage text: {str(e)}")
         return None
 
-def extract_with_selenium(url, headless=True, wait_time=3):
+def extract_with_selenium(url, headless=True, wait_time=0, enable_javascript=True):
     """
     Extract content using Selenium WebDriver with enhanced features.
     
@@ -1307,6 +1559,7 @@ def extract_with_selenium(url, headless=True, wait_time=3):
         url (str): The URL to extract content from
         headless (bool): Run browser in headless mode
         wait_time (int): Time to wait for dynamic content
+        enable_javascript (bool): Enable JavaScript execution (recommended for modern sites)
     
     Returns:
         str: Clean extracted text content
@@ -1329,7 +1582,11 @@ def extract_with_selenium(url, headless=True, wait_time=3):
         chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--disable-extensions")
         chrome_options.add_argument("--disable-images")  # Faster loading
-        chrome_options.add_argument("--disable-javascript")  # Disable JS for faster loading (optional)
+        
+        # JavaScript control - disabled only if explicitly requested
+        if not enable_javascript:
+            chrome_options.add_argument("--disable-javascript")
+        
         chrome_options.add_argument("--disable-plugins")
         chrome_options.add_argument("--disable-web-security")
         chrome_options.add_argument("--disable-features=VizDisplayCompositor")
@@ -1357,6 +1614,20 @@ def extract_with_selenium(url, headless=True, wait_time=3):
         # Wait for dynamic content to load
         print(f"⏳ Waiting {wait_time} seconds for dynamic content...")
         time.sleep(wait_time)
+        
+        # Scroll to trigger lazy-loaded content
+        if enable_javascript:
+            try:
+                print("📜 Scrolling page to load all content...")
+                # Scroll down gradually to trigger lazy loading
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight/2);")
+                time.sleep(0.5)
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(0.5)
+                driver.execute_script("window.scrollTo(0, 0);")  # Scroll back to top
+                time.sleep(0.5)
+            except Exception as e:
+                print(f"⚠️ Scrolling failed (non-critical): {e}")
         
         # Get page source after JavaScript execution
         print("📄 Extracting page content...")
@@ -1400,15 +1671,16 @@ def clean_and_extract_text(html):
             element.decompose()
     
     # Remove elements with specific classes/IDs that are likely unwanted
+    # Note: Be careful with wildcards - avoid matching body/html elements
     unwanted_selectors = [
         '[class*="ad-"]', '[class*="advertisement"]', '[class*="popup"]',
         '[class*="modal"]', '[class*="cookie"]', '[class*="newsletter"]',
-        '[class*="social"]', '[class*="share"]', '[class*="comment"]',
-        '[class*="sidebar"]', '[class*="menu"]', '[class*="nav"]',
+        'div[class*="social"]', 'div[class*="share"]', 'div[class*="comment"]',
+        'aside[class*="sidebar"]', 'div.sidebar',  # More specific sidebar targeting
         '[id*="ad-"]', '[id*="advertisement"]', '[id*="popup"]',
         '[id*="modal"]', '[id*="cookie"]', '[id*="newsletter"]',
-        '[id*="social"]', '[id*="share"]', '[id*="comment"]',
-        '[id*="sidebar"]', '[id*="menu"]', '[id*="nav"]'
+        'div[id*="social"]', 'div[id*="share"]', 'div[id*="comment"]',
+        'aside[id*="sidebar"]', 'div#sidebar'
     ]
     
     for selector in unwanted_selectors:
@@ -1455,6 +1727,40 @@ def find_main_content(soup):
     return main_element
 
 def post_process_text(text):
+    """Clean and format extracted text as plain text"""
+    # Remove excessive whitespace first
+    text = re.sub(r'\s+', ' ', text)
+    text = text.strip()
+    
+    # Remove common unwanted patterns
+    unwanted_patterns = [
+        r'Cookie\s+Policy[^.]*\.',
+        r'Privacy\s+Policy[^.]*\.',
+        r'Terms\s+of\s+Service[^.]*\.',
+        r'Subscribe\s+to\s+our\s+newsletter[^.]*\.',
+        r'Follow\s+us\s+on[^.]*\.',
+        r'Share\s+this\s+article[^.]*\.',
+        r'Advertisement[^.]*\.',
+        r'Sponsored\s+Content[^.]*\.',
+        r'We use cookies.*?(?=\.|\n)',
+        r'By clicking.*?consent.*?(?=\.|\n)',
+        r'Accept All.*?Reject All.*?(?=\.|\n)',
+    ]
+    
+    for pattern in unwanted_patterns:
+        text = re.sub(pattern, '', text, flags=re.IGNORECASE)
+    
+    # Remove excessive whitespace again after pattern removal
+    text = re.sub(r'\s+', ' ', text)
+    text = text.strip()
+    
+    # Only filter if text is very short (likely just title/navigation)
+    # Otherwise return the cleaned text as-is
+    if len(text) > 100:
+        return text
+    else:
+        return text if len(text) > 20 else ""
+
     """Clean and format extracted text as plain text"""
     # Remove excessive whitespace
     text = re.sub(r'\s+', ' ', text)

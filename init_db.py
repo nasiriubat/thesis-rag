@@ -11,7 +11,7 @@ with app.app_context():
     db.create_all()
     
     # Check if admin user exists
-    admin = User.query.filter_by(email='admin@gmail.com').first()
+    admin = User.query.filter_by(email='admin@example.com').first()
     if not admin:
         # Create admin role if it doesn't exist
         admin_role = Role.query.filter_by(name='admin').first()
@@ -23,7 +23,7 @@ with app.app_context():
         # Create admin user
         admin = User(
             name='Admin',
-            email='admin@gmail.com',
+            email='admin@example.com',
             role_id=admin_role.id
         )
         admin.set_password('123456')
