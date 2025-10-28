@@ -363,17 +363,15 @@ def admin_faqs():
 @main.route("/admin/files")
 @login_required
 def admin_files():
-    files = File.query.all()
     settings = {s.key: s.value for s in Settings.query.all()}
-    return render_template("admin/files.html", files=files, settings=settings)
+    return render_template("admin/files.html", files=[], settings=settings)
 
 
 @main.route("/admin/queries")
 @login_required
 def admin_queries():
-    queries = Query.query.all()
     settings = {s.key: s.value for s in Settings.query.all()}
-    return render_template("admin/queries.html", queries=queries, settings=settings)
+    return render_template("admin/queries.html", queries=[], settings=settings)
 
 
 @main.route("/admin/settings", methods=["GET", "POST"])
@@ -1260,6 +1258,141 @@ def search_faqs():
     except Exception as e:
         print(f"Error in search_faqs: {str(e)}")
         return jsonify({"suggestions": []}), 500
+
+
+@main.route("/api/admin/files/paginated", methods=["GET"])
+@login_required
+def api_files_paginated():
+    """Get paginated files data for admin panel."""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        search = request.args.get('search', '', type=str)
+        order_by = request.args.get('order_by', 'id', type=str)
+        order_dir = request.args.get('order_dir', 'desc', type=str)
+        
+        # Validate per_page to prevent abuse
+        per_page = min(per_page, 100)
+        
+        # Build query with search filter
+        query = File.query.join(User, File.user_id == User.id)
+        
+        if search:
+            query = query.filter(
+                File.original_filename.ilike(f'%{search}%') |
+                File.text.ilike(f'%{search}%')
+            )
+        
+        # Apply ordering
+        if hasattr(File, order_by):
+            if order_dir == 'desc':
+                query = query.order_by(getattr(File, order_by).desc())
+            else:
+                query = query.order_by(getattr(File, order_by).asc())
+        else:
+            # Default ordering
+            query = query.order_by(File.id.desc())
+        
+        # Apply pagination
+        pagination = query.paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False
+        )
+        
+        # Prepare data with truncated text
+        files_data = []
+        for file in pagination.items:
+            files_data.append({
+                'id': file.id,
+                'original_filename': file.original_filename,
+                'text': file.text[:100] + '...' if len(file.text) > 100 else file.text,
+                'user_name': file.user.name if file.user else 'Unknown',
+                'created_at': file.created_at.strftime('%Y-%m-%d %H:%M'),
+                'file_identifier': file.file_identifier
+            })
+        
+        return jsonify({
+            'data': files_data,
+            'total': pagination.total,
+            'pages': pagination.pages,
+            'current_page': pagination.page,
+            'per_page': pagination.per_page,
+            'has_prev': pagination.has_prev,
+            'has_next': pagination.has_next
+        })
+        
+    except Exception as e:
+        print(f"Error in api_files_paginated: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+
+@main.route("/api/admin/queries/paginated", methods=["GET"])
+@login_required
+def api_queries_paginated():
+    """Get paginated queries data for admin panel."""
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        search = request.args.get('search', '', type=str)
+        order_by = request.args.get('order_by', 'id', type=str)
+        order_dir = request.args.get('order_dir', 'desc', type=str)
+        
+        # Validate per_page to prevent abuse
+        per_page = min(per_page, 100)
+        
+        # Build query with search filter
+        query = Query.query
+        
+        if search:
+            query = query.filter(
+                Query.question.ilike(f'%{search}%') |
+                Query.answer.ilike(f'%{search}%')
+            )
+        
+        # Apply ordering
+        if hasattr(Query, order_by):
+            if order_dir == 'desc':
+                query = query.order_by(getattr(Query, order_by).desc())
+            else:
+                query = query.order_by(getattr(Query, order_by).asc())
+        else:
+            # Default ordering
+            query = query.order_by(Query.id.desc())
+        
+        # Apply pagination
+        pagination = query.paginate(
+            page=page,
+            per_page=per_page,
+            error_out=False
+        )
+        
+        # Prepare data
+        queries_data = []
+        for query in pagination.items:
+            queries_data.append({
+                'id': query.id,
+                'question': query.question[:100] + '...' if len(query.question) > 100 else query.question,
+                'answer': query.answer[:100] + '...' if query.answer and len(query.answer) > 100 else query.answer,
+                'answer_found': query.answer_found,
+                'happy': query.happy,
+                'language': query.language,
+                'created_at': query.created_at.strftime('%Y-%m-%d %H:%M')
+            })
+        
+        return jsonify({
+            'data': queries_data,
+            'total': pagination.total,
+            'pages': pagination.pages,
+            'current_page': pagination.page,
+            'per_page': pagination.per_page,
+            'has_prev': pagination.has_prev,
+            'has_next': pagination.has_next
+        })
+        
+    except Exception as e:
+        print(f"Error in api_queries_paginated: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 
 @main.route("/api/chat/<int:query_id>/feedback", methods=["POST"])
