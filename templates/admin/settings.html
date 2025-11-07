@@ -33,22 +33,24 @@
         color: #666;
         margin-bottom: 5px;
     }
-    
+
     /* Mobile responsive adjustments */
     @media (max-width: 768px) {
         .image-preview {
             max-width: 150px;
             max-height: 150px;
         }
-        
+
         .preview-container {
             padding: 8px;
         }
-        
-        .form-control, .form-select {
-            font-size: 16px; /* Prevents zoom on iOS */
+
+        .form-control,
+        .form-select {
+            font-size: 16px;
+            /* Prevents zoom on iOS */
         }
-        
+
         .btn {
             min-height: 44px;
             padding: 0.5rem 1rem;
@@ -70,130 +72,26 @@
     {% endfor %}
     {% endif %}
     {% endwith %}
-
-    <!-- Theme Customization Card -->
-    <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Chat Theme Customization</h6>
-        </div>
-        <div class="card-body">
-            <form method="POST" action="{{ url_for('main.admin_settings') }}">
-                <div class="row">
-                    <div class="col-lg-4 col-md-6 mb-3">
-                        <label for="theme_primary_color" class="form-label">Primary Color (Navbar, Buttons)</label>
-                        <div class="input-group">
-                            <input type="color" class="form-control form-control-color" id="theme_primary_color" name="theme_primary_color" value="{{ settings.get('theme_primary_color', '#5b1fa6') }}">
-                            <input type="text" class="form-control" id="theme_primary_color_text" value="{{ settings.get('theme_primary_color', '#5b1fa6') }}" readonly>
-                        </div>
-                        <small class="text-muted">Used for navbar, buttons, and primary accents</small>
-                    </div>
-
-                    <div class="col-lg-4 col-md-6 mb-3">
-                        <label for="theme_secondary_color" class="form-label">Secondary Color (User Messages)</label>
-                        <div class="input-group">
-                            <input type="color" class="form-control form-control-color" id="theme_secondary_color" name="theme_secondary_color" value="{{ settings.get('theme_secondary_color', '#d1aff3') }}">
-                            <input type="text" class="form-control" id="theme_secondary_color_text" value="{{ settings.get('theme_secondary_color', '#d1aff3') }}" readonly>
-                        </div>
-                        <small class="text-muted">Used for user message bubbles</small>
-                    </div>
-
-                    <div class="col-lg-4 col-md-6 mb-3">
-                        <label for="theme_bot_message_color" class="form-label">Bot Message Color</label>
-                        <div class="input-group">
-                            <input type="color" class="form-control form-control-color" id="theme_bot_message_color" name="theme_bot_message_color" value="{{ settings.get('theme_bot_message_color', '#f3f0fa') }}">
-                            <input type="text" class="form-control" id="theme_bot_message_color_text" value="{{ settings.get('theme_bot_message_color', '#f3f0fa') }}" readonly>
-                        </div>
-                        <small class="text-muted">Used for bot message bubbles</small>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-lg-4 col-md-6 mb-3">
-                        <label for="theme_background_start" class="form-label">Background Gradient Start</label>
-                        <div class="input-group">
-                            <input type="color" class="form-control form-control-color" id="theme_background_start" name="theme_background_start" value="{{ settings.get('theme_background_start', '#f5f0ff') }}">
-                            <input type="text" class="form-control" id="theme_background_start_text" value="{{ settings.get('theme_background_start', '#f5f0ff') }}" readonly>
-                        </div>
-                        <small class="text-muted">Starting color of background gradient</small>
-                    </div>
-
-                    <div class="col-lg-4 col-md-6 mb-3">
-                        <label for="theme_background_end" class="form-label">Background Gradient End</label>
-                        <div class="input-group">
-                            <input type="color" class="form-control form-control-color" id="theme_background_end" name="theme_background_end" value="{{ settings.get('theme_background_end', '#ede3f7') }}">
-                            <input type="text" class="form-control" id="theme_background_end_text" value="{{ settings.get('theme_background_end', '#ede3f7') }}" readonly>
-                        </div>
-                        <small class="text-muted">Ending color of background gradient</small>
-                    </div>
-
-                    <div class="col-lg-4 col-md-6 mb-3">
-                        <label for="theme_accent_color" class="form-label">Accent Color (Links, Icons)</label>
-                        <div class="input-group">
-                            <input type="color" class="form-control form-control-color" id="theme_accent_color" name="theme_accent_color" value="{{ settings.get('theme_accent_color', '#5b1fa6') }}">
-                            <input type="text" class="form-control" id="theme_accent_color_text" value="{{ settings.get('theme_accent_color', '#5b1fa6') }}" readonly>
-                        </div>
-                        <small class="text-muted">Used for links and accent elements</small>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-12">
-                        <div class="alert alert-info">
-                            <i class="fas fa-info-circle me-2"></i>
-                            <strong>Preview:</strong> Changes will be applied to the public chat interface after saving. Use the color pickers to customize the theme for your client.
-                        </div>
-                    </div>
-                </div>
-
-                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                    <button type="button" class="btn btn-outline-secondary me-2" onclick="resetToDefaults()">
-                        <i class="fas fa-undo me-2"></i>Reset to Defaults
-                    </button>
-                    <button type="submit" class="btn btn-primary btn-lg">Save Theme Settings</button>
-                </div>
-            </form>
-        </div>
-    </div>
+    <!-- General Settings Section -->
     <div class="card shadow mb-4">
         <div class="card-header py-3">
             <h6 class="m-0 font-weight-bold text-primary">General Settings</h6>
         </div>
         <div class="card-body">
-            <form method="POST" action="{{ url_for('main.admin_settings') }}" enctype="multipart/form-data">
+            <form method="POST" action="{{ url_for('main.admin_settings') }}" enctype="multipart/form-data"
+                id="generalSettingsForm">
                 <div class="row">
                     <div class="col-lg-8 col-md-12 mb-3">
                         <label for="logo" class="form-label required-field">Application Name</label>
-                        <input type="text" class="form-control" id="logo" name="logo" value="{{ settings.get('logo', '') }}"
-                            required>
-                    </div>
-                    
-                    <div class="col-lg-4 col-md-12 mb-3">
-                        <label for="show_matched_text" class="form-label">Show Matched Text</label>
-                        <select class="form-select" id="show_matched_text" name="show_matched_text">
-                            <option value="yes" {% if settings.get('show_matched_text') == 'yes' %}selected{% endif %}>Yes</option>
-                            <option value="no" {% if settings.get('show_matched_text') == 'no' %}selected{% endif %}>No</option>
-                        </select>
+                        <input type="text" class="form-control" id="logo" name="logo"
+                            value="{{ settings.get('logo', '') }}" required>
                     </div>
                     <div class="col-lg-4 col-md-12 mb-3">
-                        <label for="faq_search_enabled" class="form-label">Enable FAQ Search Suggestions</label>
-                        <select class="form-select" id="faq_search_enabled" name="faq_search_enabled">
-                            <option value="yes" {% if settings.get('faq_search_enabled', 'yes') == 'yes' %}selected{% endif %}>Yes</option>
-                            <option value="no" {% if settings.get('faq_search_enabled', 'yes') == 'no' %}selected{% endif %}>No</option>
-                        </select>
-                        <small class="text-muted">Show similar FAQ questions as users type</small>
-                    </div>
-                    <div class="col-lg-4 col-md-12 mb-3">
-                        <label for="chunk_number" class="form-label required-field">Similar Chunks</label>
-                        <input type="number" class="form-control" id="chunk_number" max=5 min=1 name="chunk_number" value="{{ settings.get('chunk_number', 3) }}"
-                            required>
-                    </div>
-                    <div class="col-lg-4 col-md-12 mb-3">
-                        <label for="message_history" class="form-label required-field">Message as Context (in pairs)</label>
-                        <input type="number" class="form-control" id="message_history" max=15 min=1 name="message_history" value="{{ settings.get('message_history', 10) }}"
-                            required>
+                        <label for="copyright" class="form-label">Copyright Text</label>
+                        <input type="text" class="form-control" id="copyright" name="copyright"
+                            value="{{ settings.get('copyright', '') }}" placeholder="Enter copyright text...">
                     </div>
                 </div>
-
                 <div class="row">
                     <div class="col-lg-6 col-md-12 mb-3">
                         <label for="logo_file" class="form-label">Logo Image</label>
@@ -208,7 +106,6 @@
                             {% endif %}
                         </div>
                     </div>
-
                     <div class="col-lg-6 col-md-12 mb-3">
                         <label for="favicon_file" class="form-label">Favicon</label>
                         <input type="file" class="form-control" id="favicon_file" name="favicon_file" accept="image/*">
@@ -223,40 +120,246 @@
                         </div>
                     </div>
                 </div>
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="submit" class="btn btn-primary btn-lg">Save General Settings</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
+    <!-- RAG Settings Section -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">RAG Settings</h6>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('main.admin_settings') }}" id="ragSettingsForm">
+                <div class="row">
+                    
+                    <div class="col-lg-4 col-md-12 mb-3">
+                        <label for="chunk_number" class="form-label required-field">Similar Chunks</label>
+                        <input type="number" class="form-control" id="chunk_number" max=15 min=1 name="chunk_number"
+                            value="{{ settings.get('chunk_number', 3) }}" required>
+                    </div>
+                    <div class="col-lg-4 col-md-12 mb-3">
+                        <label for="message_history" class="form-label required-field">Message as Context (in
+                            pairs)</label>
+                        <input type="number" class="form-control" id="message_history" max=20 min=1
+                            name="message_history" value="{{ settings.get('message_history', 10) }}" required>
+                    </div>
+                    <div class="col-lg-4 col-md-12 mb-3">
+                        <label for="show_matched_text" class="form-label">Show Matched Text</label>
+                        <select class="form-select" id="show_matched_text" name="show_matched_text">
+                            <option value="yes" {% if settings.get('show_matched_text')=='yes' %}selected{% endif %}>Yes
+                            </option>
+                            <option value="no" {% if settings.get('show_matched_text')=='no' %}selected{% endif %}>No
+                            </option>
+                        </select>
+                    </div>
+                    <div class="col-lg-4 col-md-12 mb-3">
+                        <label for="faq_search_enabled" class="form-label">Enable FAQ Search Suggestions</label>
+                        <select class="form-select" id="faq_search_enabled" name="faq_search_enabled">
+                            <option value="yes" {% if settings.get('faq_search_enabled', 'yes' )=='yes' %}selected{%
+                                endif %}>Yes</option>
+                            <option value="no" {% if settings.get('faq_search_enabled', 'yes' )=='no' %}selected{% endif
+                                %}>No</option>
+                        </select>
+                        <small class="text-muted">Show similar FAQ questions as users type</small>
+                    </div>
+                    <div class="col-lg-4 col-md-12 mb-3">
+                        <label for="retrieval_method" class="form-label required-field">Retrieval Method</label>
+                        <select class="form-select" id="retrieval_method" name="retrieval_method" required>
+                            <option value="KAG" {% if settings.get('retrieval_method', 'Vector' )=='KAG' %}selected{% endif %}>Knowledge Graph</option>
+                            <option value="Vector" {% if settings.get('retrieval_method', 'Vector' )=='Vector' %}selected{% endif %}>Vector Search</option>
+                            <option value="SQL" {% if settings.get('retrieval_method', 'Vector' )=='SQL' %}selected{% endif %}>SQL Aggregation</option>
+                        </select>
+                        <small class="text-muted">
+                            Vector Search: Semantic similarity. Knowledge Graph: relationship reasoning. SQL Aggregation: queries the structured facts table for large lists (e.g., "companies in Finland").
+                        </small>
+                    </div>
+                    <div class="col-lg-4 col-md-12 mb-3">
+                        <label for="zip_size_limit" class="form-label">ZIP Upload Size Limit (MB)</label>
+                        <input type="number" class="form-control" id="zip_size_limit" name="zip_size_limit"
+                            value="{{ settings.get('zip_size_limit', 200) }}" min="10" max="5000">
+                        <small class="text-muted">Maximum size for ZIP file uploads. Files exceeding this limit will be rejected. Default: 200MB</small>
+                    </div>
+                </div>
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="submit" class="btn btn-primary btn-lg">Save RAG Settings</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Model Settings Section -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Model Settings</h6>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('main.admin_settings') }}" id="modelSettingsForm">
                 <div class="row">
                     <div class="col-lg-6 col-md-12 mb-3">
                         <label for="openai_key" class="form-label required-field">OpenAI API Key</label>
                         <input type="password" class="form-control" id="openai_key" name="openai_key"
                             value="{{ settings.get('openai_key', '') }}" required>
+                        <small class="text-muted">Click "Update Models" after changing the key to refresh the model
+                            list</small>
                     </div>
                     <div class="col-lg-6 col-md-12 mb-3">
                         <label for="openai_model" class="form-label required-field">OpenAI Model</label>
-                        <select class="form-select" id="openai_model" name="openai_model" required>
-                            {% for model in models %}
-                            <option value="{{ model }}" {% if settings.get('openai_model')==model %}selected{% endif %}>
-                                {{ model }}
-                            </option>
-                            {% endfor %}
-                        </select>
+                        <div class="input-group">
+                            <select class="form-select" id="openai_model" name="openai_model" required>
+                                {% for model in models %}
+                                <option value="{{ model }}" {% if settings.get('openai_model')==model %}selected{% endif
+                                    %}>
+                                    {{ model }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <button type="button" class="btn btn-outline-secondary" id="refreshModelsBtn"
+                                onclick="refreshModels()">
+                                <i class="fas fa-sync-alt"></i> Update Models
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-lg-6 col-md-12 mb-3">
+                        <label for="model_context_limit" class="form-label">Model Context Limit (tokens)</label>
+                        <input type="number" class="form-control" id="model_context_limit" name="model_context_limit"
+                            value="{{ settings.get('model_context_limit_' + settings.get('openai_model', 'gpt-4'), '') }}"
+                            placeholder="Auto-detected or enter manually" min="1000" max="200000">
+                        <small class="text-muted">Context window limit for the selected model. If left empty, system will use safe defaults (gpt-4: 8000, gpt-4-turbo: 120000, o1: 200000). This is used to truncate context before sending to the model, keeping highest-scoring chunks.</small>
+                    </div>
+                </div>
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="submit" class="btn btn-primary btn-lg">Save Model Settings</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Theme Customization Card -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Chat Theme Customization</h6>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('main.admin_settings') }}">
+                <div class="row">
+                    <div class="col-lg-4 col-md-6 mb-3">
+                        <label for="theme_primary_color" class="form-label">Primary Color (Navbar, Buttons)</label>
+                        <div class="input-group">
+                            <input type="color" class="form-control form-control-color" id="theme_primary_color"
+                                name="theme_primary_color" value="{{ settings.get('theme_primary_color', '#5b1fa6') }}">
+                            <input type="text" class="form-control" id="theme_primary_color_text"
+                                value="{{ settings.get('theme_primary_color', '#5b1fa6') }}" readonly>
+                        </div>
+                        <small class="text-muted">Used for navbar, buttons, and primary accents</small>
+                    </div>
+
+                    <div class="col-lg-4 col-md-6 mb-3">
+                        <label for="theme_secondary_color" class="form-label">Secondary Color (User Messages)</label>
+                        <div class="input-group">
+                            <input type="color" class="form-control form-control-color" id="theme_secondary_color"
+                                name="theme_secondary_color"
+                                value="{{ settings.get('theme_secondary_color', '#d1aff3') }}">
+                            <input type="text" class="form-control" id="theme_secondary_color_text"
+                                value="{{ settings.get('theme_secondary_color', '#d1aff3') }}" readonly>
+                        </div>
+                        <small class="text-muted">Used for user message bubbles</small>
+                    </div>
+
+                    <div class="col-lg-4 col-md-6 mb-3">
+                        <label for="theme_bot_message_color" class="form-label">Bot Message Color</label>
+                        <div class="input-group">
+                            <input type="color" class="form-control form-control-color" id="theme_bot_message_color"
+                                name="theme_bot_message_color"
+                                value="{{ settings.get('theme_bot_message_color', '#f3f0fa') }}">
+                            <input type="text" class="form-control" id="theme_bot_message_color_text"
+                                value="{{ settings.get('theme_bot_message_color', '#f3f0fa') }}" readonly>
+                        </div>
+                        <small class="text-muted">Used for bot message bubbles</small>
                     </div>
                 </div>
 
-                <div class="mb-3">
-                    <label for="copyright" class="form-label">Copyright Text</label>
-                    <input type="text" class="form-control" id="copyright" name="copyright"
-                        value="{{ settings.get('copyright', '') }}" placeholder="Enter copyright text...">
+                <div class="row">
+                    <div class="col-lg-4 col-md-6 mb-3">
+                        <label for="theme_background_start" class="form-label">Background Gradient Start</label>
+                        <div class="input-group">
+                            <input type="color" class="form-control form-control-color" id="theme_background_start"
+                                name="theme_background_start"
+                                value="{{ settings.get('theme_background_start', '#f5f0ff') }}">
+                            <input type="text" class="form-control" id="theme_background_start_text"
+                                value="{{ settings.get('theme_background_start', '#f5f0ff') }}" readonly>
+                        </div>
+                        <small class="text-muted">Starting color of background gradient</small>
+                    </div>
+
+                    <div class="col-lg-4 col-md-6 mb-3">
+                        <label for="theme_background_end" class="form-label">Background Gradient End</label>
+                        <div class="input-group">
+                            <input type="color" class="form-control form-control-color" id="theme_background_end"
+                                name="theme_background_end"
+                                value="{{ settings.get('theme_background_end', '#ede3f7') }}">
+                            <input type="text" class="form-control" id="theme_background_end_text"
+                                value="{{ settings.get('theme_background_end', '#ede3f7') }}" readonly>
+                        </div>
+                        <small class="text-muted">Ending color of background gradient</small>
+                    </div>
+
+                    <div class="col-lg-4 col-md-6 mb-3">
+                        <label for="theme_accent_color" class="form-label">Accent Color (Links, Icons)</label>
+                        <div class="input-group">
+                            <input type="color" class="form-control form-control-color" id="theme_accent_color"
+                                name="theme_accent_color" value="{{ settings.get('theme_accent_color', '#5b1fa6') }}">
+                            <input type="text" class="form-control" id="theme_accent_color_text"
+                                value="{{ settings.get('theme_accent_color', '#5b1fa6') }}" readonly>
+                        </div>
+                        <small class="text-muted">Used for links and accent elements</small>
+                    </div>
                 </div>
+
+                <div class="row">
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Preview:</strong> Changes will be applied to the public chat interface after saving.
+                            Use the color pickers to customize the theme for your client.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <button type="button" class="btn btn-outline-secondary me-2" onclick="resetToDefaults()">
+                        <i class="fas fa-undo me-2"></i>Reset to Defaults
+                    </button>
+                    <button type="submit" class="btn btn-primary btn-lg">Save Theme Settings</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- About & Contact Section -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">About & Contact Pages</h6>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('main.admin_settings') }}" id="aboutContactForm">
                 <div class="mb-3">
                     <label for="about" class="form-label">About Page Content</label>
-                    <textarea class="form-control" id="about" name="about" rows="4" placeholder="Enter about page content...">{{ settings.get('about', '') }}</textarea>
+                    <textarea class="form-control" id="about" name="about" rows="4"
+                        placeholder="Enter about page content...">{{ settings.get('about', '') }}</textarea>
                 </div>
                 <div class="mb-3">
                     <label for="contact" class="form-label">Contact Page Content</label>
-                    <textarea class="form-control" id="contact" name="contact" rows="3" placeholder="Enter contact page content...">{{ settings.get('contact', '') }}</textarea>
+                    <textarea class="form-control" id="contact" name="contact" rows="3"
+                        placeholder="Enter contact page content...">{{ settings.get('contact', '') }}</textarea>
                 </div>
                 <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                    <button type="submit" class="btn btn-primary btn-lg">Save Settings</button>
+                    <button type="submit" class="btn btn-primary btn-lg">Save About & Contact</button>
                 </div>
             </form>
         </div>
@@ -324,16 +427,50 @@
     colorInputs.forEach(input => {
         const picker = document.getElementById(input.picker);
         const text = document.getElementById(input.text);
-        
+
         if (picker && text) {
-            picker.addEventListener('input', function() {
+            picker.addEventListener('input', function () {
                 text.value = this.value.toUpperCase();
             });
         }
     });
 
+    // Update context limit field when model changes
+    const modelSelect = document.getElementById('openai_model');
+    const contextLimitInput = document.getElementById('model_context_limit');
+    
+    if (modelSelect && contextLimitInput) {
+        // Default context limits for known models
+        const defaultLimits = {
+            'gpt-4': 8000,
+            'gpt-4-turbo': 120000,
+            'gpt-4-turbo-preview': 120000,
+            'gpt-4-0125-preview': 120000,
+            'gpt-4-1106-preview': 120000,
+            'gpt-3.5-turbo': 15000,
+            'gpt-3.5-turbo-16k': 15000,
+            'o1-preview': 200000,
+            'o1-mini': 200000
+        };
+        
+        modelSelect.addEventListener('change', function() {
+            const selectedModel = this.value;
+            // Only update if field is empty or has default value
+            if (!contextLimitInput.value || contextLimitInput.value === '') {
+                // Use default if available
+                for (const [key, value] of Object.entries(defaultLimits)) {
+                    if (selectedModel.startsWith(key)) {
+                        contextLimitInput.value = value;
+                        contextLimitInput.placeholder = `Default: ${value} tokens`;
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
     // Reset to defaults function
-    window.resetToDefaults = function() {
+    window.resetToDefaults = function () {
         if (confirm('Are you sure you want to reset all theme colors to default values?')) {
             document.getElementById('theme_primary_color').value = '#5b1fa6';
             document.getElementById('theme_primary_color_text').value = '#5b1fa6';
@@ -351,20 +488,107 @@
         }
     };
 
+    // Function to refresh models list
+    window.refreshModels = function () {
+        const modelSelect = document.getElementById('openai_model');
+        const refreshBtn = document.getElementById('refreshModelsBtn');
+        const openaiKey = document.getElementById('openai_key').value;
+
+        if (!openaiKey || openaiKey.trim() === '') {
+            toastr.warning('Please enter an OpenAI API key first');
+            return;
+        }
+
+        // Save current selection
+        const currentValue = modelSelect.value;
+
+        // Show loading state
+        const originalHtml = refreshBtn.innerHTML;
+        refreshBtn.disabled = true;
+        refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+
+        // First save the key temporarily, then fetch models
+        const formData = new FormData();
+        formData.append('openai_key', openaiKey);
+
+        // Save key first, then fetch models
+        fetch('{{ url_for("main.admin_settings") }}', {
+            method: 'POST',
+            body: formData
+        })
+            .then(() => {
+                // Now fetch models
+                return fetch('{{ url_for("main.api_get_models") }}');
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error && data.error !== 'OpenAI API key is not configured') {
+                    toastr.error('Error fetching models: ' + data.error);
+                    // Still update the dropdown with fallback model
+                    modelSelect.innerHTML = '<option value="gpt-4">gpt-4</option>';
+                    refreshBtn.disabled = false;
+                    refreshBtn.innerHTML = originalHtml;
+                    return;
+                }
+
+                // Update model dropdown
+                modelSelect.innerHTML = '';
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model;
+                    option.textContent = model;
+                    if (model === currentValue || (data.models.length === 1 && data.models[0] === model)) {
+                        option.selected = true;
+                    }
+                    modelSelect.appendChild(option);
+                });
+
+                if (data.error) {
+                    toastr.warning(`Loaded ${data.models.length} model(s) with warning: ${data.error}`);
+                } else {
+                    toastr.success(`Loaded ${data.models.length} model(s)`);
+                }
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = originalHtml;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                toastr.error('An error occurred while fetching models. Using default model (gpt-4).');
+                // Update dropdown with fallback model
+                modelSelect.innerHTML = '<option value="gpt-4">gpt-4</option>';
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = originalHtml;
+            });
+    };
+
     // Handle form submissions
     document.querySelectorAll('form').forEach(form => {
         form.addEventListener('submit', function (e) {
             e.preventDefault();
             const formData = new FormData(this);
+            const formId = this.id || 'unnamed';
 
-            // Get content from CKEditor instances if they exist
-            const aboutEditor = document.querySelector('#about');
-            const contactEditor = document.querySelector('#contact');
-            if (aboutEditor) {
-                formData.set('about', aboutEditor.value);
+            // Only add about and contact if this is the About & Contact form
+            if (formId === 'aboutContactForm') {
+                const aboutEditor = document.querySelector('#about');
+                const contactEditor = document.querySelector('#contact');
+                if (aboutEditor && aboutEditor.ckeditorInstance) {
+                    formData.set('about', aboutEditor.ckeditorInstance.getData());
+                } else if (aboutEditor) {
+                    formData.set('about', aboutEditor.value);
+                }
+                if (contactEditor && contactEditor.ckeditorInstance) {
+                    formData.set('contact', contactEditor.ckeditorInstance.getData());
+                } else if (contactEditor) {
+                    formData.set('contact', contactEditor.value);
+                }
             }
-            if (contactEditor) {
-                formData.set('contact', contactEditor.value);
+
+            // Debug: Log form ID and data being sent
+            console.log('DEBUG: Submitting form:', formId);
+            console.log('DEBUG: Form data being sent:');
+            for (let pair of formData.entries()) {
+                console.log('  ', pair[0], ':', pair[1]);
             }
 
             // Show loading state
@@ -373,14 +597,28 @@
             submitButton.disabled = true;
             submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
 
+            console.log('DEBUG: Sending fetch request to:', this.action);
             fetch(this.action, {
                 method: 'POST',
                 body: formData
-            }).then(response => response.json())
+            }).then(response => {
+                console.log('DEBUG: Response status:', response.status);
+                return response.json();
+            })
                 .then(data => {
                     if (data.type === 'success') {
                         toastr.success(data.message);
-                        setTimeout(() => window.location.reload(), 1500);
+                        // Only refresh models if this is the Model Settings form
+                        if (formId === 'modelSettingsForm') {
+                            const openaiKeyInput = document.getElementById('openai_key');
+                            if (openaiKeyInput && openaiKeyInput.value) {
+                                // Auto-refresh models if key was updated
+                                setTimeout(() => {
+                                    refreshModels();
+                                }, 500);
+                            }
+                        }
+                        setTimeout(() => window.location.reload(), 2000);
                     } else {
                         toastr.error(data.message);
                         submitButton.disabled = false;

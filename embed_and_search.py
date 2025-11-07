@@ -28,6 +28,19 @@ MAX_TOKENS = 500  # Smaller chunks for more precise matching
 OVERLAP = 100
 MIN_SCORE_THRESHOLD = 0.3  # Base threshold for all content types
 
+# Model context window sizes (approximate, leaving room for response)
+MODEL_CONTEXT_WINDOWS = {
+    "gpt-4": 8000,  # 8192 tokens, reserve ~200 for response
+    "gpt-4-turbo": 120000,  # 128k tokens, reserve ~2000 for response
+    "gpt-4-turbo-preview": 120000,
+    "gpt-4-0125-preview": 120000,
+    "gpt-4-1106-preview": 120000,
+    "gpt-3.5-turbo": 15000,  # 16k tokens, reserve ~1000 for response
+    "gpt-3.5-turbo-16k": 15000,
+    "o1-preview": 200000,  # 200k tokens, reserve ~2000 for response
+    "o1-mini": 200000,
+}
+
 def get_openai_key():
     """Get OpenAI API key from current app context."""
     return current_app.config.get('OPENAI_API_KEY')
@@ -179,6 +192,168 @@ def load_embeddings_and_chunks(file_id: str) -> tuple[Optional[np.ndarray], Opti
     except Exception as e:
         print(f"Error loading embeddings and chunks for {file_id}: {e}")
         return None, None
+
+def count_tokens(text: str, model: str = "gpt-4") -> int:
+    """
+    Count tokens in text using tiktoken for the specified model.
+    
+    Args:
+        text: Text to count tokens for
+        model: OpenAI model name (default: gpt-4)
+        
+    Returns:
+        Number of tokens
+    """
+    try:
+        # Get encoding for the model
+        encoding = tiktoken.encoding_for_model(model)
+        tokens = encoding.encode(text)
+        return len(tokens)
+    except Exception as e:
+        # Fallback to default encoding if model not found
+        print(f"Warning: Could not get encoding for model {model}, using default: {e}")
+        tokens = tiktoken.get_encoding("cl100k_base").encode(text)
+        return len(tokens)
+
+
+def get_model_context_limit(model: str) -> int:
+    """
+    Get the context window limit for a model.
+    
+    Priority order:
+    1. Check Settings database for manually configured limit
+    2. Check hardcoded MODEL_CONTEXT_WINDOWS dictionary
+    3. Use safe default (gpt-4 limit: 8000 tokens)
+    
+    Args:
+        model: OpenAI model name
+        
+    Returns:
+        Maximum tokens available for context (reserving space for response)
+    """
+    # Try to get from Settings database first (manual override)
+    try:
+        from flask import current_app
+        with current_app.app_context():
+            from models import Settings
+            setting_key = f"model_context_limit_{model}"
+            context_limit_setting = Settings.query.filter_by(key=setting_key).first()
+            if context_limit_setting and context_limit_setting.value:
+                try:
+                    limit = int(context_limit_setting.value)
+                    if limit <= 0:
+                        raise ValueError("Context limit must be positive")
+
+                    # Determine known limit for this model (exact match or prefix)
+                    known_limit = None
+                    if model in MODEL_CONTEXT_WINDOWS:
+                        known_limit = MODEL_CONTEXT_WINDOWS[model]
+                    else:
+                        for key, value in MODEL_CONTEXT_WINDOWS.items():
+                            if model.startswith(key):
+                                known_limit = value
+                                break
+
+                    if known_limit is not None and limit > known_limit:
+                        print(
+                            f"Warning: Stored context limit {limit} for {model} exceeds known maximum {known_limit}. "
+                            "Clamping to the safe limit."
+                        )
+                        return known_limit
+
+                    print(f"Using stored context limit for {model}: {limit} tokens")
+                    return limit
+                except ValueError:
+                    print(f"Warning: Invalid context limit value '{context_limit_setting.value}' for {model}, using defaults")
+    except Exception as e:
+        # If we can't access database, continue with defaults
+        pass
+    
+    # Check for exact match in hardcoded dictionary
+    if model in MODEL_CONTEXT_WINDOWS:
+        return MODEL_CONTEXT_WINDOWS[model]
+    
+    # Check for partial matches (e.g., "gpt-4-turbo-2024-04-09")
+    for key, value in MODEL_CONTEXT_WINDOWS.items():
+        if model.startswith(key):
+            return value
+    
+    # Safe default: gpt-4 limit (8000 tokens)
+    print(f"Warning: Unknown model {model}, using safe default context limit (8000 tokens)")
+    return MODEL_CONTEXT_WINDOWS["gpt-4"]
+
+
+def truncate_context(results: List[Dict], system_prompt: str, user_query: str, 
+                     history_text: str, model: str, reserve_tokens: int = 200) -> List[Dict]:
+    """
+    Truncate context results if they exceed the model's context window.
+    Keeps highest-scoring chunks when truncating.
+    
+    Args:
+        results: List of result dictionaries with 'chunk', 'score', 'file_id'
+        system_prompt: System prompt text
+        user_query: User query text
+        history_text: Conversation history text
+        model: OpenAI model name
+        reserve_tokens: Tokens to reserve for response (default: 200)
+        
+    Returns:
+        Truncated list of results that fit within context window
+    """
+    if not results:
+        return results
+    
+    # Get context limit for model
+    context_limit = get_model_context_limit(model)
+    available_tokens = context_limit - reserve_tokens
+    
+    # Count tokens for fixed parts
+    system_tokens = count_tokens(system_prompt, model)
+    query_tokens = count_tokens(user_query, model)
+    history_tokens = count_tokens(history_text, model) if history_text else 0
+    
+    # Calculate available tokens for context
+    fixed_tokens = system_tokens + query_tokens + history_tokens
+    context_tokens_available = available_tokens - fixed_tokens
+    
+    if context_tokens_available <= 0:
+        print(f"Warning: Fixed content exceeds context limit, returning empty results")
+        return []
+    
+    # Sort results by score (highest first) to prioritize best matches
+    sorted_results = sorted(results, key=lambda x: x.get('score', 0), reverse=True)
+    
+    # Build context incrementally until we hit the limit
+    selected_results = []
+    total_context_tokens = 0
+    
+    for result in sorted_results:
+        chunk = result.get('chunk', '')
+        # Format as it will appear in context
+        formatted_chunk = f"Relevant content from {result.get('file_id', 'unknown')}:\n{chunk}"
+        chunk_tokens = count_tokens(formatted_chunk, model)
+        
+        if total_context_tokens + chunk_tokens <= context_tokens_available:
+            selected_results.append(result)
+            total_context_tokens += chunk_tokens
+        else:
+            # Try to fit a truncated version if there's some space left
+            remaining_tokens = context_tokens_available - total_context_tokens
+            if remaining_tokens > 100:  # Only if meaningful space remains
+                # Truncate chunk to fit remaining space
+                # Rough estimate: 1 token ≈ 4 characters
+                max_chars = remaining_tokens * 4
+                truncated_chunk = chunk[:max_chars] if len(chunk) > max_chars else chunk
+                result_copy = result.copy()
+                result_copy['chunk'] = truncated_chunk
+                selected_results.append(result_copy)
+            break
+    
+    if len(selected_results) < len(results):
+        print(f"Context truncated: {len(selected_results)}/{len(results)} results fit within {context_tokens_available} tokens")
+    
+    return selected_results
+
 
 def search_across_indices(query: str, file_ids: List[str], top_k: int = 5) -> List[Dict]:
     try:

@@ -430,6 +430,11 @@
                             <i class="fas fa-edit me-2"></i>Text
                         </button>
                     </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="zip-tab" data-bs-toggle="tab" data-bs-target="#zip" type="button" role="tab">
+                            <i class="fas fa-file-archive me-2"></i>ZIP Upload
+                        </button>
+                    </li>
                 </ul>
 
                 <!-- Tab Content -->
@@ -483,6 +488,43 @@
                             <i class="fas fa-info-circle me-1"></i>
                             This text will be added to the knowledge base for AI to reference.
                         </small>
+                    </div>
+
+                    <!-- ZIP Upload Tab -->
+                    <div class="tab-pane fade" id="zip" role="tabpanel">
+                        <div class="upload-area" id="zipUploadArea">
+                            <div class="upload-content text-center">
+                                <i class="fas fa-file-archive fa-3x text-muted mb-3"></i>
+                                <h5>Drag & Drop ZIP File Here</h5>
+                                <p class="text-muted">or click to browse</p>
+                                <input type="file" id="zipInput" name="zip" accept=".zip" style="display: none;">
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                <i class="fas fa-info-circle me-1"></i>
+                                Supported files in ZIP: PDF, DOCX, TXT. Files will be processed from all subfolders. Maximum ZIP size: <span id="zipSizeLimit">{{ settings.get('zip_size_limit', 200) }}</span> MB.
+                            </small>
+                        </div>
+                        <div id="zipFileInfo" class="mt-3" style="display: none;">
+                            <div class="alert alert-info">
+                                <i class="fas fa-file-archive me-2"></i>
+                                <strong id="zipFileName"></strong> (<span id="zipFileSize"></span>)
+                            </div>
+                        </div>
+                        <div id="zipProgress" class="mt-3" style="display: none;">
+                            <div class="progress">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%">
+                                    Processing ZIP file...
+                                </div>
+                            </div>
+                            <small class="text-muted mt-2 d-block">Please wait while files are being processed. This may take a while for large ZIP files.</small>
+                        </div>
+                        <div class="mt-3">
+                            <button type="button" class="btn btn-primary" id="uploadZipBtn" disabled>
+                                <i class="fas fa-upload me-2"></i>Upload ZIP
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1616,6 +1658,200 @@
         
         // Update save buttons when URL input changes
         document.getElementById('urlInput').addEventListener('input', updateSaveButtons);
+
+        // ZIP Upload functionality
+        const zipInput = document.getElementById('zipInput');
+        const zipUploadArea = document.getElementById('zipUploadArea');
+        const zipFileInfo = document.getElementById('zipFileInfo');
+        const zipFileName = document.getElementById('zipFileName');
+        const zipFileSize = document.getElementById('zipFileSize');
+        const zipProgress = document.getElementById('zipProgress');
+        const uploadZipBtn = document.getElementById('uploadZipBtn');
+        const zipSizeLimit = document.getElementById('zipSizeLimit');
+        
+        // Get ZIP size limit from settings (if available)
+        // This would need to be passed from backend or fetched
+        // For now, default to 200MB
+        
+        // ZIP upload area drag and drop
+        if (zipUploadArea) {
+            zipUploadArea.addEventListener('dragover', function(e) {
+                e.preventDefault();
+                zipUploadArea.classList.add('dragover');
+            });
+            
+            zipUploadArea.addEventListener('dragleave', function(e) {
+                e.preventDefault();
+                zipUploadArea.classList.remove('dragover');
+            });
+            
+            zipUploadArea.addEventListener('drop', function(e) {
+                e.preventDefault();
+                zipUploadArea.classList.remove('dragover');
+                const files = Array.from(e.dataTransfer.files);
+                if (files.length > 0 && files[0].name.toLowerCase().endsWith('.zip')) {
+                    zipInput.files = e.dataTransfer.files;
+                    handleZipFileSelect(files[0]);
+                } else {
+                    toastr.error('Please drop a ZIP file');
+                }
+            });
+            
+            zipUploadArea.addEventListener('click', function() {
+                zipInput.click();
+            });
+        }
+        
+        // ZIP file input change handler
+        if (zipInput) {
+            zipInput.addEventListener('change', function() {
+                if (this.files && this.files.length > 0) {
+                    handleZipFileSelect(this.files[0]);
+                }
+            });
+        }
+        
+        // Handle ZIP file selection
+        function handleZipFileSelect(file) {
+            if (!file.name.toLowerCase().endsWith('.zip')) {
+                toastr.error('Please select a ZIP file');
+                return;
+            }
+            
+            // Get ZIP size limit from settings (default 200MB)
+            const zipLimitMB = parseInt(zipSizeLimit ? zipSizeLimit.textContent : 200);
+            const zipLimitBytes = zipLimitMB * 1024 * 1024;
+            
+            // Check file size
+            if (file.size > zipLimitBytes) {
+                toastr.error(`ZIP file size (${(file.size / 1024 / 1024).toFixed(2)} MB) exceeds limit (${zipLimitMB} MB)`);
+                return;
+            }
+            
+            // Show file info
+            zipFileName.textContent = file.name;
+            zipFileSize.textContent = formatFileSize(file.size);
+            zipFileInfo.style.display = 'block';
+            uploadZipBtn.disabled = false;
+        }
+        
+        // Upload ZIP file
+        if (uploadZipBtn) {
+            uploadZipBtn.addEventListener('click', function() {
+                uploadZipFile();
+            });
+        }
+        
+        function uploadZipFile() {
+            const zipFile = zipInput.files[0];
+            if (!zipFile) {
+                toastr.error('Please select a ZIP file');
+                return;
+            }
+            
+            // Get ZIP size limit
+            const zipLimitMB = parseInt(zipSizeLimit ? zipSizeLimit.textContent : 200);
+            const zipLimitBytes = zipLimitMB * 1024 * 1024;
+            
+            // Validate file size
+            if (zipFile.size > zipLimitBytes) {
+                toastr.error(`ZIP file size (${(zipFile.size / 1024 / 1024).toFixed(2)} MB) exceeds limit (${zipLimitMB} MB)`);
+                return;
+            }
+            
+            // Show progress
+            zipProgress.style.display = 'block';
+            uploadZipBtn.disabled = true;
+            zipInput.disabled = true;
+            
+            // Create form data
+            const formData = new FormData();
+            formData.append('zip', zipFile);
+            
+            // Upload ZIP file
+            fetch('{{ url_for("main.api_upload_zip") }}', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                zipProgress.style.display = 'none';
+                uploadZipBtn.disabled = false;
+                zipInput.disabled = false;
+                
+                if (data.type === 'success') {
+                    toastr.success(data.message);
+                    
+                    // If there are failed files, download CSV
+                    if (data.csv_data) {
+                        downloadFailedFilesCSV(data.csv_data);
+                    }
+                    
+                    // Reset form
+                    zipInput.value = '';
+                    zipFileInfo.style.display = 'none';
+                    
+                    // Refresh file list
+                    loadFiles();
+                    
+                    // Close modal if needed
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('uploadFileModal'));
+                    if (modal) {
+                        modal.hide();
+                    }
+                } else {
+                    toastr.error(data.message);
+                }
+            })
+            .catch(error => {
+                zipProgress.style.display = 'none';
+                uploadZipBtn.disabled = false;
+                zipInput.disabled = false;
+                console.error('Error:', error);
+                toastr.error('An error occurred while uploading the ZIP file');
+            });
+        }
+        
+        // Download failed files CSV
+        function downloadFailedFilesCSV(base64Data) {
+            try {
+                // Decode base64 data
+                const csvContent = atob(base64Data);
+                
+                // Create blob
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                
+                // Create download link
+                const link = document.createElement('a');
+                const url = URL.createObjectURL(blob);
+                
+                // Generate filename with timestamp
+                const now = new Date();
+                const timestamp = now.getFullYear() + 
+                    String(now.getMonth() + 1).padStart(2, '0') + 
+                    String(now.getDate()).padStart(2, '0') + '_' +
+                    String(now.getHours()).padStart(2, '0') + 
+                    String(now.getMinutes()).padStart(2, '0') + 
+                    String(now.getSeconds()).padStart(2, '0');
+                
+                link.href = url;
+                link.download = `failed_files_${timestamp}.csv`;
+                link.style.display = 'none';
+                
+                // Trigger download
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                // Clean up
+                URL.revokeObjectURL(url);
+                
+                toastr.info('Failed files CSV downloaded');
+            } catch (error) {
+                console.error('Error downloading CSV:', error);
+                toastr.error('Error downloading failed files CSV');
+            }
+        }
 
     });
     // Copy to clipboard function with fallback

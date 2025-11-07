@@ -17,5 +17,6 @@ youtube-transcript-api
 gunicorn 
 flask-migrate
 selenium
-
+langdetect
+flask-migrate
 

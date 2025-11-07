@@ -47,6 +47,7 @@ class File(db.Model):
     embedding = db.Column(db.Text)  # Store the embedding for semantic search
     file_identifier = db.Column(db.String(100))  # ID used to locate embedding files
     original_filename = db.Column(db.String(255))  # Store the uploaded or derived name
+    language = db.Column(db.String(2), default='en')  # Store detected language code (en/fi)
 
 # Chat query tracking
 class Query(db.Model):
@@ -70,3 +71,26 @@ class Settings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     key = db.Column(db.String(50), unique=True, nullable=False)
     value = db.Column(db.Text, nullable=False)
+
+# Knowledge Graph model for storing triples (subject, relation, object)
+class KnowledgeGraph(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    subject = db.Column(db.Text, nullable=False)
+    relation = db.Column(db.Text, nullable=False)
+    object = db.Column(db.Text, nullable=False)
+    source_id = db.Column(db.Integer, db.ForeignKey('file.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class KnowledgeFact(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    file_id = db.Column(db.Integer, db.ForeignKey('file.id'), nullable=True)
+    entity_type = db.Column(db.String(50))
+    subject = db.Column(db.Text, nullable=False)
+    relation = db.Column(db.String(150), nullable=False)
+    normalized_relation = db.Column(db.String(100), nullable=False)
+    object = db.Column(db.Text, nullable=False)
+    attributes = db.Column(db.JSON, nullable=True)
+    confidence = db.Column(db.Float, default=0.0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    file = db.relationship('File', backref=db.backref('facts', lazy=True))

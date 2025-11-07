@@ -11,19 +11,32 @@ from flask import (
 )
 from sqlalchemy import func
 from flask_login import login_user, login_required, logout_user, current_user
-from models import db, User, Role, FAQ, File, Query, Settings, NewQuestion
+from models import db, User, Role, FAQ, File, Query, Settings, NewQuestion, KnowledgeFact
 from urllib.parse import urlparse,parse_qs
 
 from werkzeug.security import generate_password_hash
 from datetime import datetime
 import os
+import sys
 from embed_and_search import (
     generate_and_store_embeddings,
     search_across_indices,
     split_into_chunks,
     create_embedding,
+    count_tokens,
+    truncate_context,
+)
+from query_preprocessing import preprocess_query
+from query_intent import infer_query_intent, normalize_relations
+from knowledge_graph import (
+    process_file_to_graph,
+    search_knowledge_graph,
+    get_graph_stats,
+    clear_all_graphs,
+    delete_document_graph,
 )
 from openai import OpenAI
+from openai import APIConnectionError, APIError, AuthenticationError, RateLimitError
 import json
 import numpy as np
 import uuid
@@ -34,6 +47,8 @@ import re
 from pathlib import Path
 from werkzeug.utils import secure_filename
 import time
+from langdetect import detect, DetectorFactory, LangDetectException
+from collections import defaultdict
 try:
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options
@@ -87,6 +102,28 @@ def chat():
         return jsonify({"error": "No question provided", "type": "error"}), 400
 
     try:
+        # Preprocess query
+        preprocessed = preprocess_query(question)
+        processed_question = preprocessed.get('normalized', question)
+        query_type = preprocessed.get('query_type', 'factual')
+        
+        # Log query type for debugging
+        print(f"Query type detected: {query_type}, keywords: {preprocessed.get('keywords', [])}")
+
+        # Infer higher-level query intent for structured aggregation scenarios
+        intent = infer_query_intent(question)
+        print(
+            "Intent detection:",
+            {
+                "entity_type": intent.get("entity_type"),
+                "relations": intent.get("relations"),
+                "filters": intent.get("filters"),
+                "confidence": intent.get("confidence"),
+                "source": intent.get("source"),
+            },
+        )
+        structured_results = []
+        structured_context = ""
 
         def save_query(answer_found=True, answer=None):
             query = Query(
@@ -122,6 +159,21 @@ def chat():
             if show_matched_text and show_matched_text.value
             else "yes"
         )
+        # Get retrieval method (Vector or KAG)
+        retrieval_method_setting = Settings.query.filter_by(key="retrieval_method").first()
+        if retrieval_method_setting and retrieval_method_setting.value:
+            retrieval_method = retrieval_method_setting.value.strip()
+            print(f"DEBUG: Found retrieval_method in DB = '{retrieval_method}'")
+        else:
+            retrieval_method = "Vector"
+            print(f"DEBUG: No retrieval_method in DB, using default = '{retrieval_method}'")
+        
+        # Ensure it's either Vector or KAG
+        if retrieval_method not in ["Vector", "KAG", "SQL"]:
+            print(f"DEBUG: Invalid retrieval_method '{retrieval_method}', defaulting to 'Vector'")
+            retrieval_method = "Vector"
+        
+        print(f"DEBUG: Final retrieval_method being used = '{retrieval_method}'")
 
         if (
             not openai_key
@@ -139,21 +191,217 @@ def chat():
                 400,
             )
 
-        # 3. Search across file embeddings
+        # Initialize OpenAI client with timeout settings
+        client = OpenAI(
+            api_key=openai_key.value,
+            timeout=30.0,  # 30 second timeout
+            max_retries=2  # Retry up to 2 times
+        )
+
+        if intent.get("confidence", 0.0) < 0.5:
+            llm_intent = infer_query_intent(question, client)
+            if llm_intent.get("confidence", 0.0) > intent.get("confidence", 0.0):
+                intent = llm_intent
+                print("Intent refined via LLM fallback:", intent)
+
+        structured_results, structured_context, structured_source_files = fetch_structured_facts(
+            intent
+        )
+        if structured_results:
+            print(
+                f"Structured aggregation available: {len(structured_results)} entities, "
+                f"context length {len(structured_context.splitlines())} lines"
+            )
+
+        sql_mode = retrieval_method == "SQL"
+
+        if sql_mode and structured_results:
+            answer_text = format_structured_results_text(structured_results, intent.get("filters"))
+            sources_used, used_file_names = build_sources_html_from_structured(structured_source_files)
+            query = save_query(answer=answer_text)
+            return jsonify({
+                "answer": answer_text,
+                "sources_used": sources_used,
+                "used_file_names": used_file_names,
+                "structured_results": [],
+                "type": "success",
+                "query_id": query.id,
+            })
+
+        # 3. Search across file embeddings or knowledge graph
         files = File.query.all()
         file_ids = [f.file_identifier for f in files if f.file_identifier]
         file_id_to_title = {
             f.file_identifier: f.original_filename for f in files if f.file_identifier
         }
 
-        if not file_ids:
-            return handle_no_content(question, language)
         # get chunk number from settings
         chunk_number = Settings.query.filter_by(key="chunk_number").first()
         chunk_number = chunk_number.value if chunk_number and chunk_number.value else 3
-        # make it int
         chunk_number = int(chunk_number)
-        results = search_across_indices(question, file_ids, top_k=chunk_number)
+
+        # Helper function for KAG retrieval (two-phase)
+        def get_kag_results(query, processed_query):
+            """Two-phase KAG retrieval: Phase 1 - Get all matching triples, Phase 2 - Extract unique entities"""
+            # Phase 1: Find all matching triples (no limit - chunk_number only applies to Vector)
+            kg_results = search_knowledge_graph(processed_query, top_k=None)
+            
+            if not kg_results:
+                return []
+            
+            # Phase 2: Extract unique entities (subjects and objects)
+            unique_entities = set()
+            all_triples = []
+            
+            for triple in kg_results:
+                subject = triple.get('subject', '').strip()
+                obj = triple.get('object', '').strip()
+                
+                if subject:
+                    unique_entities.add(subject)
+                if obj:
+                    unique_entities.add(obj)
+                
+                all_triples.append(triple)
+            
+            # Phase 3: Format for context
+            # Build entities list and triples context in a more natural format
+            entities_list = sorted(list(unique_entities))
+            
+            # Format triples in a more readable way
+            triples_context = "\n".join([
+                f"- {t.get('subject', '')} {t.get('relation', '')} {t.get('object', '')}"
+                for t in all_triples
+            ])
+            
+            # Combine into single context chunk with better formatting
+            combined_context = f"Relevant information from knowledge graph:\n{triples_context}"
+            
+            # Return as results format (single result with all entities and triples)
+            # Use first triple's source_id for file reference
+            source_id = all_triples[0].get('source_id') if all_triples else None
+            file_id = None
+            if source_id:
+                file_obj = File.query.filter_by(id=source_id).first()
+                if file_obj and file_obj.file_identifier:
+                    file_id = file_obj.file_identifier
+            
+            return [{
+                'file_id': file_id or 'unknown',
+                'chunk': combined_context,
+                'score': 1.0,  # High score for KAG results
+                'distance': 0.0,
+                'is_kag': True,  # Flag to identify KAG results
+                'entities': entities_list,
+                'triples': all_triples
+            }]
+        
+        # Helper function for Vector retrieval
+        def get_vector_results(query, processed_query, file_ids_list, chunk_num):
+            """Vector search retrieval"""
+            if not file_ids_list:
+                return []
+            return search_across_indices(processed_query, file_ids_list, top_k=chunk_num)
+        
+        results = []
+        use_structured_context = bool(structured_results) and sql_mode
+
+        active_method = retrieval_method
+
+        if not use_structured_context:
+            if sql_mode:
+                active_method = "Vector"
+                print("DEBUG: SQL mode without structured results, falling back to Vector retrieval")
+
+            if active_method == "KAG":
+                results = get_kag_results(question, processed_question)
+            else:
+                if not file_ids:
+                    return handle_no_content(question, language)
+                results = get_vector_results(question, processed_question, file_ids, chunk_number)
+
+        primary_method = active_method
+
+        # Get system prompt (use default with {language} placeholder)
+        model_name = openai_model.value if openai_model and openai_model.value else "gpt-4"
+        # Default prompt with {language} placeholder support
+        default_prompt = (
+            "You are a helpful assistant. Use the following context to answer the user's question in {language}. "
+            "Provide a natural, human-like answer that synthesizes the information from the context. "
+            "For questions about people, places, or entities, create a coherent narrative that combines relevant facts. "
+            "For aggregate queries (e.g., 'list all companies'), organize the information clearly but naturally. "
+            "Do not simply list numbered items - instead, write in complete sentences and paragraphs. "
+            "If the context doesn't contain enough information to fully answer the question, say so clearly. "
+            "For casual greetings and chats, reply naturally and ask how you can assist."
+        )
+        language_name = "English" if language == "en" else "Finnish"
+        system_prompt_text = default_prompt.replace("{language}", language_name)
+        
+        # Build temporary context to check token count for fallback
+        temp_context_segments = []
+        if structured_context:
+            temp_context_segments.append(structured_context)
+        temp_context_segments.extend([
+            f"Relevant content from {file_id_to_title.get(r.get('file_id', 'unknown'), 'unknown')}:\n{r.get('chunk', '')}"
+            if not r.get('is_kag', False) else r.get('chunk', '')
+            for r in results
+            if r.get("file_id") in file_id_to_title or r.get('is_kag', False)
+        ])
+        temp_context = "\n\n".join(temp_context_segments)
+        
+        # Check if we have enough context (>= 100 tokens including system prompt and query)
+        temp_total_tokens = (
+            count_tokens(system_prompt_text, model_name) +
+            count_tokens(question, model_name) +
+            count_tokens(temp_context, model_name)
+        )
+        
+        # Fallback system: if insufficient context, try alternative method
+        if temp_total_tokens < 100 and results:
+            print(f"DEBUG: Insufficient context ({temp_total_tokens} tokens), trying fallback method")
+            sys.stdout.flush()
+            
+            fallback_results = []
+            if primary_method == "KAG":
+                # Try Vector search as fallback
+                if file_ids:
+                    fallback_results = get_vector_results(question, processed_question, file_ids, chunk_number)
+                    if fallback_results:
+                        # Check if fallback has enough tokens
+                        fallback_context = "\n\n".join([
+                            r.get('chunk', '')
+                            for r in fallback_results
+                        ])
+                        fallback_tokens = (
+                            count_tokens(system_prompt_text, model_name) +
+                            count_tokens(question, model_name) +
+                            count_tokens(fallback_context, model_name)
+                        )
+                        if fallback_tokens >= 100:
+                            results = fallback_results
+                            print(f"DEBUG: Using KAG fallback ({fallback_tokens} tokens)")
+                            sys.stdout.flush()
+            elif primary_method == "Vector":
+                # Try KAG search as fallback
+                fallback_results = get_kag_results(question, processed_question)
+                if fallback_results:
+                    # Check if fallback has enough tokens
+                    fallback_context = "\n\n".join([
+                        r.get('chunk', '')
+                        for r in fallback_results
+                    ])
+                    fallback_tokens = (
+                        count_tokens(system_prompt_text, model_name) +
+                        count_tokens(question, model_name) +
+                        count_tokens(fallback_context, model_name)
+                    )
+                    if fallback_tokens >= 100:
+                        results = fallback_results
+                        print(f"DEBUG: Using KAG fallback ({fallback_tokens} tokens)")
+                        sys.stdout.flush()
+            else:
+                print("DEBUG: Skipping fallback - SQL mode without alternate retrieval")
+        
         if not results and not history_text:
             # Save query with answer_found=False and return no content message
             message = {
@@ -170,51 +418,160 @@ def chat():
 
             return jsonify({"answer": message, "type": "info", "query_id": query.id})
 
-        # 4. Build context from results
-        context = "\n\n".join(
-            [
-                f"Relevant content from {file_id_to_title[r['file_id']]}:\n{r['chunk']}"
-                for r in results
-                if r["file_id"] in file_id_to_title
-            ]
+        # 4. Truncate context if needed based on token limits
+        
+        # Truncate results if they exceed token limits
+        truncated_results = truncate_context(
+            results=results,
+            system_prompt=system_prompt_text,
+            user_query=question,
+            history_text=history_text,
+            model=model_name,
+            reserve_tokens=600  # Reserve for response (max_tokens=600)
         )
-        used_files = [
-            {
-                "name": file_id_to_title[r["file_id"]],
-                "chunk": r.get("chunk", ""),  # adjust to your actual field name
-            }
-            for r in results
-            if r["file_id"] in file_id_to_title
-        ]
+        
+        # Build context from structured aggregation + truncated results
+        context_parts = []
+        used_files = []
+
+        if structured_context:
+            source_label = f"Structured facts ({len(structured_results)} entities)"
+            derived_from = ", ".join(
+                sorted({src["name"] for src in structured_source_files if src.get("name")})
+            )
+            chunk_text = structured_context
+            if derived_from:
+                chunk_text += f"\n\nDerived from: {derived_from}"
+            context_parts.append("Structured facts:\n" + structured_context)
+            used_files.append(
+                {
+                    "name": source_label,
+                    "chunk": chunk_text,
+                }
+            )
+
+        for r in truncated_results:
+            if r.get('is_kag', False):
+                # KAG results already formatted with entities and triples
+                context_parts.append(r.get('chunk', ''))
+            elif r.get("file_id") in file_id_to_title:
+                # Vector results - standard format
+                context_parts.append(f"Relevant content from {file_id_to_title[r['file_id']]}:\n{r['chunk']}")
+            elif r.get("file_id"):
+                # Vector results with file_id not in mapping (fallback)
+                file_id = r.get("file_id", "Unknown source")
+                context_parts.append(f"Relevant content from {file_id}:\n{r.get('chunk', '')}")
+
+            if r.get('is_kag', False):
+                used_files.append({
+                    "name": "Knowledge Graph Results",
+                    "chunk": r.get("chunk", ""),
+                })
+                print(f"DEBUG: Added KAG result to sources")
+            elif r.get("file_id") in file_id_to_title:
+                used_files.append({
+                    "name": file_id_to_title[r["file_id"]],
+                    "chunk": r.get("chunk", ""),
+                })
+                print(f"DEBUG: Added Vector result to sources: {file_id_to_title[r['file_id']]}")
+            elif r.get("file_id"):
+                file_id = r.get("file_id", "Unknown source")
+                used_files.append({
+                    "name": file_id,
+                    "chunk": r.get("chunk", ""),
+                })
+                print(f"DEBUG: Added Vector result to sources (fallback): {file_id}")
+            else:
+                print(f"DEBUG: WARNING - Result missing file_id and is_kag flag, skipping from sources")
+                print(f"DEBUG: Result keys: {list(r.keys())}")
+
+        context = "\n\n".join(context_parts)
+
+        # Log token counts for debugging
+        context_tokens = count_tokens(context, model_name)
+        system_tokens = count_tokens(system_prompt_text, model_name)
+        query_tokens = count_tokens(question, model_name)
+        history_tokens = count_tokens(history_text, model_name) if history_text else 0
+        total_tokens = system_tokens + query_tokens + history_tokens + context_tokens
+        print(f"Token counts - System: {system_tokens}, Query: {query_tokens}, History: {history_tokens}, Context: {context_tokens}, Total: {total_tokens}")
 
         # 5. Generate answer via OpenAI
-        system_prompt = {
-            "en": "You are a helpful assistant. Use the following context to answer the question in English. If the context doesn't contain enough information to answer the question, say so. And for casual greetings and chats, reply and ask how can i assist you.",
-            "fi": "Olet avulias assistentti. Käytä seuraavaa kontekstia vastataksesi kysymykseen suomeksi. Jos kontekstissa ei ole tarpeeksi tietoa vastataksesi kysymykseen, kerro niin:",
-        }
-        prompt_content = f"""Conversation so far:{history_text} User's latest question:{question}Retrieved context:{context}"""
-        client = OpenAI(api_key=openai_key.value)
-        response = client.chat.completions.create(
-            model=(
-                openai_model.value if openai_model and openai_model.value else "gpt-4"
-            ),
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt.get(language, system_prompt["en"]),
-                },
-                {
-                    "role": "user",
-                    # "content": f"Context: {context}\n\nQuestion: {question}",
-                    "content": prompt_content,
-                },
-            ],
-            temperature=0.8,
-            max_tokens=600,
-        )
+        # Structure the prompt more clearly
+        if history_text:
+            prompt_content = f"""Based on the conversation history and the retrieved context below, please answer the user's question in a natural, human-like way.
 
-        answer = response.choices[0].message.content
+Conversation history:
+{history_text}
+
+User's question: {question}
+
+Retrieved context:
+{context}
+
+Please provide a comprehensive answer that synthesizes the information from the context. Write in complete sentences and paragraphs, not as a numbered list."""
+        else:
+            prompt_content = f"""Based on the retrieved context below, please answer the user's question in a natural, human-like way.
+
+User's question: {question}
+
+Retrieved context:
+{context}
+
+Please provide a comprehensive answer that synthesizes the information from the context. Write in complete sentences and paragraphs, not as a numbered list."""
+        
+        try:
+            response = client.chat.completions.create(
+                model=(
+                    openai_model.value if openai_model and openai_model.value else "gpt-4"
+                ),
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_prompt_text,
+                    },
+                    {
+                        "role": "user",
+                        # "content": f"Context: {context}\n\nQuestion: {question}",
+                        "content": prompt_content,
+                    },
+                ],
+                temperature=0.8,
+                max_tokens=600,
+            )
+            answer = response.choices[0].message.content
+        except APIConnectionError as e:
+            error_msg = {
+                "en": "Unable to connect to OpenAI API. Please check your internet connection and try again.",
+                "fi": "Yhteyttä OpenAI API:in ei voitu muodostaa. Tarkista internetyhteytesi ja yritä uudelleen."
+            }.get(language, "en")
+            print(f"OpenAI Connection Error: {str(e)}")
+            return jsonify({"answer": error_msg, "type": "error"}), 500
+        except AuthenticationError as e:
+            error_msg = {
+                "en": "Invalid OpenAI API key. Please check your API key in Settings.",
+                "fi": "Virheellinen OpenAI API-avain. Tarkista API-avaimesi Asetukset-sivulla."
+            }.get(language, "en")
+            print(f"OpenAI Authentication Error: {str(e)}")
+            return jsonify({"answer": error_msg, "type": "error"}), 500
+        except RateLimitError as e:
+            error_msg = {
+                "en": "OpenAI API rate limit exceeded. Please wait a moment and try again.",
+                "fi": "OpenAI API:n nopeusrajoitus ylitetty. Odota hetki ja yritä uudelleen."
+            }.get(language, "en")
+            print(f"OpenAI Rate Limit Error: {str(e)}")
+            return jsonify({"answer": error_msg, "type": "error"}), 429
+        except APIError as e:
+            error_msg = {
+                "en": f"OpenAI API error: {str(e)}. Please try again later.",
+                "fi": f"OpenAI API -virhe: {str(e)}. Yritä myöhemmin uudelleen."
+            }.get(language, "en")
+            print(f"OpenAI API Error: {str(e)}")
+            return jsonify({"answer": error_msg, "type": "error"}), 500
+        
+        # Initialize sources_used and used_file_names
+        sources_used = ""  # Initialize to empty string
         used_file_names = []  # For PDF generation - just clean file names
+        
         if used_files:
             files_list = []
             for f in used_files:
@@ -251,11 +608,28 @@ def chat():
         # 6. Save query with the generated answer
         query = save_query(answer=answer)
         # PRINT clean_file_names
-        return jsonify({"answer": answer,"sources_used":sources_used, "used_file_names":used_file_names, "type": "success", "query_id": query.id})
+        return jsonify({
+            "answer": answer,
+            "sources_used": sources_used,
+            "used_file_names": used_file_names,
+            "structured_results": structured_results,
+            "type": "success",
+            "query_id": query.id,
+        })
 
     except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
         print(f"Error in chat route: {str(e)}")
-        return jsonify({"error": str(e), "type": "error"}), 500
+        print(f"Traceback: {error_trace}")
+        
+        # Provide user-friendly error message
+        error_msg = {
+            "en": "An error occurred while processing your request. Please try again later.",
+            "fi": "Pyyntösi käsittelyssä tapahtui virhe. Yritä myöhemmin uudelleen."
+        }.get(language, "en")
+        
+        return jsonify({"answer": error_msg, "type": "error"}), 500
 
 
 def handle_no_content(question, language):
@@ -378,29 +752,90 @@ def admin_queries():
 @login_required
 def admin_settings():
     if request.method == "POST":
+        print("DEBUG: admin_settings POST route called")
+        sys.stdout.flush()
+        print(f"DEBUG: Form data keys: {list(request.form.keys())}")
+        sys.stdout.flush()
+        print(f"DEBUG: retrieval_method in form: {'retrieval_method' in request.form}")
+        sys.stdout.flush()
+        print(f"DEBUG: retrieval_method value: {request.form.get('retrieval_method', 'NOT FOUND')}")
+        sys.stdout.flush()
         try:
             # Handle file uploads
             upload_dir = os.path.join(current_app.static_folder, "uploads")
             os.makedirs(upload_dir, exist_ok=True)
-
-            settings_to_update = {
-                "logo": request.form.get("logo"),
-                "chunk_number": request.form.get("chunk_number"),
-                "openai_key": request.form.get("openai_key"),
-                "copyright": request.form.get("copyright"),
-                "about": request.form.get("about"),
-                "contact": request.form.get("contact"),
-                "openai_model": request.form.get("openai_model"),
-                "show_matched_text": request.form.get("show_matched_text", "yes"),
-                "faq_search_enabled": request.form.get("faq_search_enabled", "yes"),
-                "theme_primary_color": request.form.get("theme_primary_color", "#5b1fa6"),
-                "theme_secondary_color": request.form.get("theme_secondary_color", "#d1aff3"),
-                "theme_bot_message_color": request.form.get("theme_bot_message_color", "#f3f0fa"),
-                "theme_background_start": request.form.get("theme_background_start", "#f5f0ff"),
-                "theme_background_end": request.form.get("theme_background_end", "#ede3f7"),
-                "theme_accent_color": request.form.get("theme_accent_color", "#5b1fa6"),
-                "message_history": request.form.get("message_history", 10),
-            }
+            
+            # Only process fields that are actually in the form
+            # This way each form only updates its own fields
+            settings_to_update = {}
+            
+            # RAG Settings form fields
+            if "retrieval_method" in request.form:
+                settings_to_update["retrieval_method"] = request.form.get("retrieval_method")
+                print(f"DEBUG: Adding retrieval_method: '{settings_to_update['retrieval_method']}'")
+            if "chunk_number" in request.form:
+                settings_to_update["chunk_number"] = request.form.get("chunk_number")
+            if "message_history" in request.form:
+                settings_to_update["message_history"] = request.form.get("message_history")
+            if "show_matched_text" in request.form:
+                settings_to_update["show_matched_text"] = request.form.get("show_matched_text", "yes")
+            if "faq_search_enabled" in request.form:
+                settings_to_update["faq_search_enabled"] = request.form.get("faq_search_enabled", "yes")
+            if "zip_size_limit" in request.form:
+                zip_size_limit = request.form.get("zip_size_limit")
+                if zip_size_limit:
+                    try:
+                        # Validate and store as integer
+                        zip_size_limit = int(zip_size_limit)
+                        if 10 <= zip_size_limit <= 5000:
+                            settings_to_update["zip_size_limit"] = zip_size_limit
+                        else:
+                            print(f"DEBUG: zip_size_limit out of range: {zip_size_limit}")
+                    except ValueError:
+                        print(f"DEBUG: Invalid zip_size_limit value: {zip_size_limit}")
+            
+            # Model Settings form fields
+            if "openai_key" in request.form:
+                settings_to_update["openai_key"] = request.form.get("openai_key")
+            if "openai_model" in request.form:
+                model_name = request.form.get("openai_model")
+                settings_to_update["openai_model"] = model_name
+                # Save context limit for this specific model
+                if "model_context_limit" in request.form:
+                    context_limit = request.form.get("model_context_limit")
+                    if context_limit and context_limit.strip():
+                        # Store as model-specific setting: model_context_limit_{model_name}
+                        settings_to_update[f"model_context_limit_{model_name}"] = context_limit.strip()
+                        print(f"DEBUG: Saving context limit for {model_name}: {context_limit} tokens")
+                        sys.stdout.flush()
+            # General Settings form fields
+            if "logo" in request.form:
+                settings_to_update["logo"] = request.form.get("logo")
+            if "copyright" in request.form:
+                settings_to_update["copyright"] = request.form.get("copyright")
+            
+            # About & Contact form fields
+            if "about" in request.form:
+                settings_to_update["about"] = request.form.get("about")
+            if "contact" in request.form:
+                settings_to_update["contact"] = request.form.get("contact")
+            
+            # Theme settings (from theme form)
+            if "theme_primary_color" in request.form:
+                settings_to_update["theme_primary_color"] = request.form.get("theme_primary_color", "#5b1fa6")
+            if "theme_secondary_color" in request.form:
+                settings_to_update["theme_secondary_color"] = request.form.get("theme_secondary_color", "#d1aff3")
+            if "theme_bot_message_color" in request.form:
+                settings_to_update["theme_bot_message_color"] = request.form.get("theme_bot_message_color", "#f3f0fa")
+            if "theme_background_start" in request.form:
+                settings_to_update["theme_background_start"] = request.form.get("theme_background_start", "#f5f0ff")
+            if "theme_background_end" in request.form:
+                settings_to_update["theme_background_end"] = request.form.get("theme_background_end", "#ede3f7")
+            if "theme_accent_color" in request.form:
+                settings_to_update["theme_accent_color"] = request.form.get("theme_accent_color", "#5b1fa6")
+            
+            print(f"DEBUG: Processing {len(settings_to_update)} settings from form")
+            sys.stdout.flush()
 
             # Handle logo file upload
             logo_file = request.files.get("logo_file")
@@ -436,19 +871,39 @@ def admin_settings():
                 # Skip None values to avoid constraint errors
                 if value is None:
                     continue
+                
+                # Strip whitespace for retrieval_method to avoid issues
+                if key == "retrieval_method":
+                    value = value.strip() if isinstance(value, str) else value
+                    print(f"DEBUG: Saving retrieval_method = '{value}' (type: {type(value)})")
+                    sys.stdout.flush()
                     
                 setting = Settings.query.filter_by(key=key).first()
                 if setting:
-                    setting.value = value
+                    old_value = setting.value
+                    setting.value = str(value).strip() if isinstance(value, str) else str(value)
+                    if key == "retrieval_method":
+                        print(f"DEBUG: Updated retrieval_method from '{old_value}' to '{setting.value}'")
+                        sys.stdout.flush()
                 else:
-                    setting = Settings(key=key, value=value)
+                    setting = Settings(key=key, value=str(value).strip() if isinstance(value, str) else str(value))
                     db.session.add(setting)
+                    if key == "retrieval_method":
+                        print(f"DEBUG: Created new retrieval_method setting with value '{setting.value}'")
+                        sys.stdout.flush()
 
             db.session.commit()
+            print("DEBUG: Settings saved successfully, committing to DB")
+            sys.stdout.flush()
             return jsonify(
                 {"message": "Settings updated successfully", "type": "success"}
             )
         except Exception as e:
+            import traceback
+            error_trace = traceback.format_exc()
+            print(f"DEBUG: Error in admin_settings POST: {str(e)}")
+            print(f"DEBUG: Traceback: {error_trace}")
+            sys.stdout.flush()
             return (
                 jsonify(
                     {"message": f"Error updating settings: {str(e)}", "type": "error"}
@@ -461,7 +916,11 @@ def admin_settings():
 
     if "openai_key" in settings and settings["openai_key"]:
         try:
-            client = OpenAI(api_key=settings["openai_key"])
+            client = OpenAI(
+                api_key=settings["openai_key"],
+                timeout=30.0,  # 30 second timeout
+                max_retries=2  # Retry up to 2 times
+            )
             resp = client.models.list()
 
             models = [
@@ -479,13 +938,83 @@ def admin_settings():
 
             if not models:
                 models = ["gpt-4"]
+        except APIConnectionError as e:
+            print(f"⚠️ Connection error fetching models: {e}")
+            models = ["gpt-4"]
+        except AuthenticationError as e:
+            print(f"⚠️ Authentication error fetching models: {e}")
+            models = ["gpt-4"]
+        except RateLimitError as e:
+            print(f"⚠️ Rate limit error fetching models: {e}")
+            models = ["gpt-4"]
+        except APIError as e:
+            print(f"⚠️ API error fetching models: {e}")
+            models = ["gpt-4"]
         except Exception as e:
-            print("⚠️ Error fetching models:", e)
+            print(f"⚠️ Error fetching models: {e}")
             models = ["gpt-4"]
     else:
         models = ["gpt-4"]
 
     return render_template("admin/settings.html", settings=settings, models=models)
+
+
+@main.route("/api/models", methods=["GET"])
+@login_required
+def api_get_models():
+    """API endpoint to fetch OpenAI models for the current API key."""
+    try:
+        openai_key = Settings.query.filter_by(key="openai_key").first()
+        
+        if not openai_key or not openai_key.value:
+            return jsonify({"error": "OpenAI API key is not configured", "models": ["gpt-4"]}), 200
+        
+        try:
+            client = OpenAI(
+                api_key=openai_key.value,
+                timeout=30.0,  # 30 second timeout
+                max_retries=2  # Retry up to 2 times
+            )
+            resp = client.models.list()
+            
+            models = [
+                m.id
+                for m in resp.data
+                if (
+                    (m.id.startswith("gpt-") or m.id.startswith("o1-"))
+                    and "embedding" not in m.id
+                    and "audio" not in m.id
+                    and ":" not in m.id
+                )
+            ]
+            
+            models = sorted(set(models), reverse=True)
+            
+            if not models:
+                models = ["gpt-4"]
+            
+            return jsonify({"models": models, "error": None})
+        except APIConnectionError as e:
+            error_msg = "Unable to connect to OpenAI API. Please check your internet connection."
+            print(f"⚠️ Connection error fetching models: {e}")
+            return jsonify({"models": ["gpt-4"], "error": error_msg}), 200
+        except AuthenticationError as e:
+            error_msg = "Invalid OpenAI API key. Please check your API key in Settings."
+            print(f"⚠️ Authentication error fetching models: {e}")
+            return jsonify({"models": ["gpt-4"], "error": error_msg}), 200
+        except RateLimitError as e:
+            error_msg = "OpenAI API rate limit exceeded. Please wait a moment and try again."
+            print(f"⚠️ Rate limit error fetching models: {e}")
+            return jsonify({"models": ["gpt-4"], "error": error_msg}), 200
+        except APIError as e:
+            error_msg = f"OpenAI API error: {str(e)}"
+            print(f"⚠️ API error fetching models: {e}")
+            return jsonify({"models": ["gpt-4"], "error": error_msg}), 200
+        except Exception as e:
+            print(f"⚠️ Error fetching models: {e}")
+            return jsonify({"models": ["gpt-4"], "error": str(e)}), 200
+    except Exception as e:
+        return jsonify({"models": ["gpt-4"], "error": str(e)}), 500
 
 
 @main.route("/admin/new-questions")
@@ -681,6 +1210,40 @@ def is_url(text: str) -> bool:
         return False
 
 
+def detect_language(text: str) -> str:
+    """
+    Detect the language of the given text.
+    
+    Args:
+        text: Text to detect language from
+    
+    Returns:
+        Language code ('en' for English, 'fi' for Finnish, or 'en' as default)
+    """
+    try:
+        # Set seed for reproducibility
+        DetectorFactory.seed = 0
+        
+        # Sample text for detection (first 1000 chars for speed)
+        sample_text = text[:1000] if len(text) > 1000 else text
+        
+        # Skip if too short
+        if len(sample_text.strip()) < 10:
+            return 'en'  # Default to English
+        
+        detected = detect(sample_text)
+        
+        # Map detected language to our supported languages
+        # Only support English (en) and Finnish (fi), default to English
+        if detected == 'fi':
+            return 'fi'
+        else:
+            return 'en'  # Default to English for all other languages
+    except (LangDetectException, Exception) as e:
+        print(f"Language detection error: {e}, defaulting to English")
+        return 'en'  # Default to English on error
+
+
 def extract_text_from_file(file_or_url):
     """Extract text from uploaded file, raw text, or URL based on its type."""
     try:
@@ -785,6 +1348,200 @@ def check_duplicate_filenames(files):
     return duplicate_files
 
 
+def delete_file_completely(file_id):
+    """
+    Delete a file completely: database record, embeddings, and knowledge graph data.
+    
+    Args:
+        file_id: ID of the file to delete
+    
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        file_obj = File.query.filter_by(id=file_id).first()
+        if not file_obj:
+            return False
+        
+        file_identifier = file_obj.file_identifier
+        
+        # Delete embeddings files
+        if file_identifier:
+            from pathlib import Path
+            embeddings_folder = Path("dataembedding")
+            embeddings_file = embeddings_folder / f"{file_identifier}_embeddings.npy"
+            chunks_file = embeddings_folder / f"{file_identifier}_chunks.json"
+            
+            if embeddings_file.exists():
+                embeddings_file.unlink()
+            if chunks_file.exists():
+                chunks_file.unlink()
+        
+        # Delete knowledge graph triples
+        from knowledge_graph import KnowledgeGraph
+        KnowledgeGraph.query.filter_by(source_id=file_id).delete()
+        
+        # Delete file record
+        db.session.delete(file_obj)
+        db.session.flush()
+        
+        return True
+    except Exception as e:
+        print(f"Error deleting file {file_id}: {str(e)}")
+        db.session.rollback()
+        return False
+
+
+def extract_zip_files(zip_file):
+    """
+    Extract files from ZIP archive, preserving folder structure.
+    
+    Args:
+        zip_file: Uploaded ZIP file object
+    
+    Returns:
+        List of tuples: [(file_path, relative_path_in_zip), ...]
+        Only includes supported file types (.txt, .pdf, .docx)
+    """
+    import zipfile
+    import tempfile
+    import shutil
+    
+    supported_extensions = {'.txt', '.pdf', '.docx'}
+    extracted_files = []
+    temp_dir = None
+    
+    try:
+        # Create temporary directory for extraction
+        temp_dir = tempfile.mkdtemp()
+        
+        # Extract ZIP file
+        with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+            # Get all file names in ZIP
+            all_files = zip_ref.namelist()
+            
+            # Filter and extract supported files
+            for file_path in all_files:
+                # Skip directories
+                if file_path.endswith('/'):
+                    continue
+                
+                # Check if file has supported extension
+                file_ext = os.path.splitext(file_path)[1].lower()
+                if file_ext not in supported_extensions:
+                    continue
+                
+                # Extract file to temp directory
+                extracted_path = os.path.join(temp_dir, file_path)
+                os.makedirs(os.path.dirname(extracted_path), exist_ok=True)
+                
+                try:
+                    zip_ref.extract(file_path, temp_dir)
+                    extracted_files.append((extracted_path, file_path))
+                except Exception as e:
+                    print(f"Error extracting {file_path} from ZIP: {str(e)}")
+                    continue
+        
+        return extracted_files, temp_dir
+    
+    except zipfile.BadZipFile:
+        print("Invalid ZIP file")
+        if temp_dir and os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        return [], None
+    except Exception as e:
+        print(f"Error extracting ZIP file: {str(e)}")
+        if temp_dir and os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        return [], None
+
+
+def generate_failed_files_csv(failed_files):
+    """
+    Generate CSV content for failed files.
+    
+    Args:
+        failed_files: List of dicts with 'filename', 'error', 'path_in_zip'
+    
+    Returns:
+        CSV content as string
+    """
+    import csv
+    import io
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Write header
+    writer.writerow(['Filename', 'Error Reason', 'Path in ZIP'])
+    
+    # Write data rows
+    for failed_file in failed_files:
+        writer.writerow([
+            failed_file.get('filename', ''),
+            failed_file.get('error', ''),
+            failed_file.get('path_in_zip', '')
+        ])
+    
+    return output.getvalue()
+
+
+def generate_filename_from_zip_path(zip_path, content=None):
+    """
+    Generate filename from ZIP path, preserving folder structure.
+    
+    Args:
+        zip_path: Relative path in ZIP (e.g., "folder1/subfolder/file.pdf")
+        content: Optional text content for fallback
+    
+    Returns:
+        Safe filename preserving folder structure
+    """
+    try:
+        # Get current time for uniqueness
+        current_time = datetime.now().strftime("%H%M")
+        
+        # Preserve folder structure by replacing / with /
+        # But ensure it's safe for database
+        # Keep the folder structure as-is
+        safe_path = zip_path.replace('\\', '/')  # Normalize path separators
+        
+        # If path is just filename, use existing logic
+        if '/' not in safe_path:
+            original_name = os.path.splitext(safe_path)[0]
+            extension = os.path.splitext(safe_path)[1]
+            safe_name = re.sub(r"[^\w\s-]", "", original_name)
+            safe_name = re.sub(r"[-\s]+", "_", safe_name)
+            return f"{safe_name}_{current_time}{extension}"
+        
+        # Preserve folder structure
+        # Replace special characters in path components but keep /
+        path_parts = safe_path.split('/')
+        safe_parts = []
+        for part in path_parts:
+            if part:
+                # Clean each part
+                safe_part = re.sub(r"[^\w\s-]", "", part)
+                safe_part = re.sub(r"[-\s]+", "_", safe_part)
+                safe_parts.append(safe_part)
+        
+        # Reconstruct path
+        safe_path = '/'.join(safe_parts)
+        
+        # Add timestamp to filename (last part)
+        if safe_parts:
+            last_part = safe_parts[-1]
+            name, ext = os.path.splitext(last_part)
+            safe_parts[-1] = f"{name}_{current_time}{ext}"
+            safe_path = '/'.join(safe_parts)
+        
+        return safe_path
+    
+    except Exception as e:
+        print(f"Error generating filename from ZIP path: {str(e)}")
+        return f"file_{current_time}"
+
+
 def check_duplicate_url(url):
     """Check if a URL has already been processed."""
     try:
@@ -850,6 +1607,10 @@ def api_upload_file():
                         )
                         continue
 
+                    # Detect language from text
+                    detected_language = detect_language(text)
+                    print(f"Detected language for {file.filename}: {detected_language}")
+
                     file_identifier = generate_and_store_embeddings(text)
                     if not file_identifier:
                         error_messages.append(
@@ -864,8 +1625,25 @@ def api_upload_file():
                         user_id=current_user.id,
                         file_identifier=file_identifier,
                         original_filename=filename,
+                        language=detected_language,
                     )
                     db.session.add(db_file)
+                    db.session.flush()  # Flush to get the file.id
+                    
+                    # Extract and store knowledge graph triples with language awareness
+                    try:
+                        openai_key = Settings.query.filter_by(key="openai_key").first()
+                        if openai_key and openai_key.value:
+                            client = OpenAI(
+                                api_key=openai_key.value,
+                                timeout=30.0,
+                                max_retries=2
+                            )
+                            process_file_to_graph(db_file.id, text, client, detected_language)
+                    except Exception as kg_error:
+                        print(f"Error processing knowledge graph for file {db_file.id}: {kg_error}")
+                        # Don't fail the upload if KG extraction fails
+                    
                     success_count += 1
                 except Exception as e:
                     error_messages.append(f"Error processing {file.filename}: {str(e)}")
@@ -917,6 +1695,10 @@ def api_upload_file():
                     400,
                 )
 
+            # Detect language from text
+            detected_language = detect_language(text)
+            print(f"Detected language for URL {url}: {detected_language}")
+
             file_identifier = generate_and_store_embeddings(text)
             if not file_identifier:
                 return (
@@ -933,8 +1715,25 @@ def api_upload_file():
                 user_id=current_user.id,
                 file_identifier=file_identifier,
                 original_filename=filename,
+                language=detected_language,
             )
             db.session.add(db_file)
+            db.session.flush()  # Flush to get the file.id
+            
+            # Extract and store knowledge graph triples with language awareness
+            try:
+                openai_key = Settings.query.filter_by(key="openai_key").first()
+                if openai_key and openai_key.value:
+                    client = OpenAI(
+                        api_key=openai_key.value,
+                        timeout=30.0,
+                        max_retries=2
+                    )
+                    process_file_to_graph(db_file.id, text, client, detected_language)
+            except Exception as kg_error:
+                print(f"Error processing knowledge graph for URL file {db_file.id}: {kg_error}")
+                # Don't fail the upload if KG extraction fails
+            
             db.session.commit()
 
             return jsonify(
@@ -945,6 +1744,10 @@ def api_upload_file():
             text = request.form.get("text", "").strip()
             if not text:
                 return jsonify({"message": "No text provided", "type": "error"}), 400
+
+            # Detect language from text
+            detected_language = detect_language(text)
+            print(f"Detected language for text input: {detected_language}")
 
             file_identifier = generate_and_store_embeddings(text)
             if not file_identifier:
@@ -962,8 +1765,25 @@ def api_upload_file():
                 user_id=current_user.id,
                 file_identifier=file_identifier,
                 original_filename=filename,
+                language=detected_language,
             )
             db.session.add(db_file)
+            db.session.flush()  # Flush to get the file.id
+            
+            # Extract and store knowledge graph triples with language awareness
+            try:
+                openai_key = Settings.query.filter_by(key="openai_key").first()
+                if openai_key and openai_key.value:
+                    client = OpenAI(
+                        api_key=openai_key.value,
+                        timeout=30.0,
+                        max_retries=2
+                    )
+                    process_file_to_graph(db_file.id, text, client, detected_language)
+            except Exception as kg_error:
+                print(f"Error processing knowledge graph for text file {db_file.id}: {kg_error}")
+                # Don't fail the upload if KG extraction fails
+            
             db.session.commit()
 
             return jsonify(
@@ -979,6 +1799,231 @@ def api_upload_file():
     except Exception as e:
         print(f"Error in api_upload_file: {str(e)}")
         return jsonify({"message": str(e), "type": "error"}), 500
+
+
+@main.route("/api/file/zip", methods=["POST"])
+@login_required
+def api_upload_zip():
+    """Handle ZIP file upload, extract files, and process them sequentially."""
+    import zipfile
+    import shutil
+    import base64
+    import tempfile
+    
+    temp_dir = None
+    try:
+        # Get ZIP file
+        zip_file = request.files.get("zip")
+        if not zip_file or zip_file.filename == "":
+            return jsonify({"message": "No ZIP file selected", "type": "error"}), 400
+        
+        # Check file extension
+        if not zip_file.filename.lower().endswith('.zip'):
+            return jsonify({"message": "Invalid file type. Please upload a ZIP file.", "type": "error"}), 400
+        
+        # Get ZIP size limit from settings
+        zip_size_limit_setting = Settings.query.filter_by(key="zip_size_limit").first()
+        zip_size_limit_mb = int(zip_size_limit_setting.value) if zip_size_limit_setting and zip_size_limit_setting.value else 200
+        zip_size_limit_bytes = zip_size_limit_mb * 1024 * 1024  # Convert MB to bytes
+        
+        # Check ZIP file size
+        zip_file.seek(0, os.SEEK_END)
+        zip_file_size = zip_file.tell()
+        zip_file.seek(0)
+        
+        if zip_file_size > zip_size_limit_bytes:
+            return jsonify({
+                "message": f"ZIP file size ({zip_file_size / 1024 / 1024:.2f} MB) exceeds limit ({zip_size_limit_mb} MB)",
+                "type": "error"
+            }), 400
+        
+        # Validate ZIP file
+        try:
+            with zipfile.ZipFile(zip_file, 'r') as test_zip:
+                test_zip.testzip()
+        except zipfile.BadZipFile:
+            return jsonify({"message": "Invalid or corrupted ZIP file", "type": "error"}), 400
+        
+        # Extract ZIP files
+        zip_file.seek(0)  # Reset file pointer
+        extracted_files, temp_dir = extract_zip_files(zip_file)
+        
+        if not extracted_files:
+            return jsonify({
+                "message": "ZIP file contains no supported files (PDF, DOCX, TXT)",
+                "type": "error"
+            }), 400
+        
+        # Process files sequentially
+        success_count = 0
+        failed_files = []
+        
+        # Get OpenAI client for KG processing
+        openai_key = Settings.query.filter_by(key="openai_key").first()
+        openai_client = None
+        if openai_key and openai_key.value:
+            try:
+                openai_client = OpenAI(
+                    api_key=openai_key.value,
+                    timeout=30.0,
+                    max_retries=2
+                )
+            except Exception as e:
+                print(f"Error initializing OpenAI client: {str(e)}")
+        
+        for extracted_path, relative_path in extracted_files:
+            try:
+                # Generate base filename from ZIP path (preserve folder structure)
+                # First, create a base filename without timestamp for duplicate checking
+                safe_path = relative_path.replace('\\', '/')
+                path_parts = safe_path.split('/')
+                safe_parts = []
+                for part in path_parts:
+                    if part:
+                        safe_part = re.sub(r"[^\w\s-]", "", part)
+                        safe_part = re.sub(r"[-\s]+", "_", safe_part)
+                        safe_parts.append(safe_part)
+                base_path = '/'.join(safe_parts)
+                
+                # Check for duplicate by matching base path (without timestamp)
+                # Look for files where original_filename starts with base_path
+                existing_file = File.query.filter(
+                    File.original_filename.like(f"{base_path}%")
+                ).first()
+                
+                if existing_file:
+                    # Delete old file completely
+                    if not delete_file_completely(existing_file.id):
+                        print(f"Warning: Could not delete old file {existing_file.id}")
+                
+                # Generate final filename with timestamp
+                filename = generate_filename_from_zip_path(relative_path)
+                
+                # Open file for processing
+                # Create a file-like object for extract_text_from_file
+                class FileWrapper:
+                    def __init__(self, file_path, filename):
+                        self.file_path = file_path
+                        self.filename = filename
+                        self._file = None
+                    
+                    def read(self):
+                        if not self._file:
+                            self._file = open(self.file_path, 'rb')
+                        # Reset to beginning if needed
+                        self._file.seek(0)
+                        return self._file.read()
+                    
+                    def seek(self, pos):
+                        if not self._file:
+                            self._file = open(self.file_path, 'rb')
+                        self._file.seek(pos)
+                    
+                    def close(self):
+                        if self._file:
+                            self._file.close()
+                            self._file = None
+                
+                file_wrapper = FileWrapper(extracted_path, relative_path)
+                
+                try:
+                    # Extract text
+                    text = extract_text_from_file(file_wrapper)
+                finally:
+                    file_wrapper.close()
+                
+                if not text:
+                    failed_files.append({
+                        'filename': os.path.basename(relative_path),
+                        'error': 'Could not extract text from file',
+                        'path_in_zip': relative_path
+                    })
+                    continue
+                
+                # Detect language from text
+                detected_language = detect_language(text)
+                print(f"Detected language for {relative_path}: {detected_language}")
+                
+                # Generate embeddings
+                file_identifier = generate_and_store_embeddings(text)
+                if not file_identifier:
+                    failed_files.append({
+                        'filename': os.path.basename(relative_path),
+                        'error': 'Failed to generate embeddings',
+                        'path_in_zip': relative_path
+                    })
+                    continue
+                
+                # Create database record
+                db_file = File(
+                    text=text,
+                    user_id=current_user.id,
+                    file_identifier=file_identifier,
+                    original_filename=filename,
+                    language=detected_language,
+                )
+                db.session.add(db_file)
+                db.session.flush()  # Flush to get the file.id
+                
+                # Extract and store knowledge graph triples with language awareness
+                if openai_client:
+                    try:
+                        process_file_to_graph(db_file.id, text, openai_client, detected_language)
+                    except Exception as kg_error:
+                        print(f"Error processing knowledge graph for file {db_file.id}: {kg_error}")
+                        # Don't fail the upload if KG extraction fails
+                
+                success_count += 1
+                    
+            except Exception as e:
+                failed_files.append({
+                    'filename': os.path.basename(relative_path),
+                    'error': f'Error processing file: {str(e)}',
+                    'path_in_zip': relative_path
+                })
+                print(f"Error processing {relative_path}: {str(e)}")
+                continue
+        
+        # Commit all successful files
+        if success_count > 0:
+            db.session.commit()
+        
+        # Generate CSV for failed files if any
+        csv_data = None
+        if failed_files:
+            csv_content = generate_failed_files_csv(failed_files)
+            csv_data = base64.b64encode(csv_content.encode('utf-8')).decode('utf-8')
+        
+        # Clean up temp directory
+        if temp_dir and os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        
+        # Prepare response
+        message = f"Successfully processed {success_count} file(s)"
+        if failed_files:
+            message += f". {len(failed_files)} file(s) failed to process"
+        
+        response = {
+            "type": "success",
+            "message": message,
+            "success_count": success_count,
+            "failed_count": len(failed_files)
+        }
+        
+        if csv_data:
+            response["csv_data"] = csv_data
+        
+        return jsonify(response)
+        
+    except Exception as e:
+        # Clean up temp directory on error
+        if temp_dir and os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+        
+        print(f"Error in api_upload_zip: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"message": f"Error processing ZIP file: {str(e)}", "type": "error"}), 500
 
 
 def get_file_paths(file_identifier):
@@ -1789,3 +2834,159 @@ def post_process_text(text):
             cleaned_lines.append(line)
     
     return '\n'.join(cleaned_lines)
+
+def fetch_structured_facts(intent: dict, max_entities: int = 50, max_facts: int = 300):
+    """Retrieve structured facts matching the inferred query intent."""
+
+    if not intent:
+        return [], "", []
+
+    relations = intent.get("relations") or []
+    filters = intent.get("filters") or {}
+    entity_type = intent.get("entity_type")
+
+    if not relations and not filters:
+        # Not enough structure to run an aggregated query
+        return [], "", []
+
+    query = KnowledgeFact.query
+
+    if relations:
+        query = query.filter(KnowledgeFact.normalized_relation.in_(relations))
+
+    if entity_type:
+        query = query.filter(
+            (KnowledgeFact.entity_type == entity_type)
+            | (KnowledgeFact.entity_type.is_(None))
+        )
+
+    location_filter = filters.get("location")
+    if location_filter:
+        query = query.filter(KnowledgeFact.object.ilike(f"%{location_filter}%"))
+
+    facts = (
+        query.order_by(KnowledgeFact.confidence.desc(), KnowledgeFact.created_at.desc())
+        .limit(max_facts)
+        .all()
+    )
+
+    if not facts:
+        return [], "", []
+
+    aggregated = {}
+    unique_files = {}
+
+    for fact in facts:
+        subject = fact.subject
+        entry = aggregated.setdefault(
+            subject,
+            {
+                "subject": subject,
+                "entity_type": fact.entity_type,
+                "facts": [],
+                "fact_keys": set(),
+                "sources": set(),
+            },
+        )
+
+        if fact.entity_type and not entry.get("entity_type"):
+            entry["entity_type"] = fact.entity_type
+
+        fact_key = (fact.normalized_relation, fact.object)
+        if fact_key not in entry["fact_keys"]:
+            entry["facts"].append(
+                {
+                    "relation": fact.normalized_relation,
+                    "value": fact.object,
+                    "raw_relation": fact.relation,
+                }
+            )
+            entry["fact_keys"].add(fact_key)
+
+        if fact.file:
+            entry["sources"].add(
+                (
+                    fact.file.file_identifier,
+                    fact.file.original_filename,
+                )
+            )
+            unique_files.setdefault(
+                fact.file.file_identifier,
+                {
+                    "name": fact.file.original_filename,
+                    "file_identifier": fact.file.file_identifier,
+                },
+            )
+
+        if len(aggregated) >= max_entities:
+            break
+
+    structured_results = []
+    context_lines = []
+
+    for entry in aggregated.values():
+        structured_results.append(
+            {
+                "subject": entry["subject"],
+                "entity_type": entry.get("entity_type"),
+                "facts": entry["facts"],
+                "sources": [
+                    {
+                        "file_identifier": fid,
+                        "file_name": fname,
+                    }
+                    for fid, fname in entry["sources"]
+                ],
+            }
+        )
+
+        context_lines.append(f"{entry['subject']}:")
+        for fact in entry["facts"]:
+            context_lines.append(f"  - {fact['relation']}: {fact['value']}")
+
+    structured_context = "\n".join(context_lines)
+    structured_sources = list(unique_files.values())
+
+    return structured_results, structured_context, structured_sources
+
+def format_structured_results_text(structured_results, filters=None):
+    """Build a deterministic plain-text representation of structured SQL results."""
+
+    lines = []
+    filters = filters or {}
+
+    if filters:
+        filter_parts = [f"{key}: {value}" for key, value in filters.items() if value]
+        if filter_parts:
+            lines.append("Filters: " + ", ".join(filter_parts))
+            lines.append("")
+
+    for idx, result in enumerate(structured_results, start=1):
+        subject = result.get("subject") or f"Entity {idx}"
+        lines.append(f"{idx}. {subject}")
+        for fact in result.get("facts", []):
+            relation = fact.get("relation", "detail").replace("_", " ").title()
+            value = fact.get("value", "")
+            lines.append(f"   - {relation}: {value}")
+        lines.append("")
+
+    return "\n".join(lines).strip()
+
+def build_sources_html_from_structured(structured_source_files):
+    if not structured_source_files:
+        return "", []
+
+    seen = set()
+    entries = []
+    used_file_names = []
+
+    for src in structured_source_files:
+        name = src.get("name") or src.get("file_identifier") or "Unknown source"
+        if name in seen:
+            continue
+        seen.add(name)
+        entries.append(f"- {name}")
+        used_file_names.append(name)
+
+    html = "<br><br><b>Sources used:</b><br>" + "<br>".join(entries)
+    return html, used_file_names

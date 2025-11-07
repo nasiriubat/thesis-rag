@@ -63,4 +63,14 @@ if __name__ == '__main__':
         basepath: app
     })
     from werkzeug.serving import run_simple
-    run_simple('0.0.0.0', port, application)
+    # run_simple('0.0.0.0', port, application,debug=True)
+    run_simple('0.0.0.0', port, application, use_reloader=True)
+
+
+
+
+
+
+
+
+

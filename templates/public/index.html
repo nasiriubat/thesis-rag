@@ -1241,6 +1241,18 @@ function askQuestion(question) {
         if (data.sources_used) {
             answer += `${data.sources_used}`;
         }
+        if (Array.isArray(data.structured_results) && data.structured_results.length > 0) {
+            const structuredHtml = data.structured_results
+                .map(result => {
+                    const factsList = (result.facts || [])
+                        .map(fact => `<li><strong>${fact.relation}</strong>: ${fact.value}</li>`)
+                        .join('');
+                    const title = result.subject || getTranslation('structuredItem', currentLanguage) || 'Item';
+                    return `<div class="structured-result-item"><div class="structured-result-title">${title}</div><ul>${factsList}</ul></div>`;
+                })
+                .join('');
+            answer += `<div class="structured-results"><strong>Structured results:</strong>${structuredHtml}</div>`;
+        }
         const messageId = addMessage(answer, 'bot');
         addToHistory('answer', data.answer);
 
