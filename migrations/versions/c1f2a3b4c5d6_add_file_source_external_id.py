@@ -7,6 +7,7 @@ Create Date: 2025-03-01
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 revision = 'c1f2a3b4c5d6'
@@ -16,12 +17,22 @@ depends_on = None
 
 
 def upgrade():
-    with op.batch_alter_table('file', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('source', sa.String(20), nullable=True))
-        batch_op.add_column(sa.Column('external_id', sa.String(255), nullable=True))
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    file_columns = [c["name"] for c in inspector.get_columns("file")]
+    with op.batch_alter_table("file", schema=None) as batch_op:
+        if "source" not in file_columns:
+            batch_op.add_column(sa.Column("source", sa.String(20), nullable=True))
+        if "external_id" not in file_columns:
+            batch_op.add_column(sa.Column("external_id", sa.String(255), nullable=True))
 
 
 def downgrade():
-    with op.batch_alter_table('file', schema=None) as batch_op:
-        batch_op.drop_column('external_id')
-        batch_op.drop_column('source')
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    file_columns = [c["name"] for c in inspector.get_columns("file")]
+    with op.batch_alter_table("file", schema=None) as batch_op:
+        if "external_id" in file_columns:
+            batch_op.drop_column("external_id")
+        if "source" in file_columns:
+            batch_op.drop_column("source")

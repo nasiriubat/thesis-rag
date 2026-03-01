@@ -48,6 +48,13 @@
     {% endif %}
     {% endwith %}
 
+    <div class="mb-3 d-flex justify-content-end align-items-center">
+        <span class="text-muted small me-2">Includes code, uploads, and database</span>
+        <a href="{{ url_for('main.admin_backup') }}" class="btn btn-outline-secondary" download>
+            <i class="fas fa-download me-2"></i>Backup project (zip)
+        </a>
+    </div>
+
     <ul class="nav nav-tabs settings-tabs mb-3" id="settingsTab" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="site-tab" data-bs-toggle="tab" data-bs-target="#site-pane" type="button" role="tab">

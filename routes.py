@@ -8,6 +8,7 @@ from flask import (
     flash,
     session,
     current_app,
+    send_file,
 )
 from sqlalchemy import func
 from flask_login import login_user, login_required, logout_user, current_user
@@ -34,6 +35,8 @@ import re
 from pathlib import Path
 from werkzeug.utils import secure_filename
 import time
+import zipfile
+import io
 from zotero_client import (
     get_libraries,
     get_items_with_attachments,
@@ -525,6 +528,59 @@ def api_zotero_sync():
         print(f"Zotero sync error: {e}")
         db.session.rollback()
         return jsonify({"type": "error", "message": str(e)}), 500
+
+
+# Directories and files to exclude from backup (like .gitignore)
+_BACKUP_SKIP_DIRS = {
+    "venv", ".git", "__pycache__", "env", ".venv", "env.bak", "venv.bak",
+    "node_modules", ".idea", ".vscode", "instance", ".webassets-cache",
+    "dataembedding", "htmlcov", ".tox", ".pytest_cache", "build", "dist", "eggs",
+}
+_BACKUP_SKIP_FILES = {".env", ".env.local", ".env.*.local"}
+_BACKUP_SKIP_SUFFIXES = (".pyc", ".pyo", ".db", ".sqlite", ".sqlite3", ".npy", ".faiss", ".npz", ".log")
+
+
+@main.route("/admin/backup")
+@login_required
+def admin_backup():
+    """Download the project as a zip (code, templates, static, migrations, uploads; excludes venv, .git, .env, dataembedding)."""
+    try:
+        root = current_app.root_path
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for dirpath, dirnames, filenames in os.walk(root, topdown=True):
+                # Skip excluded directories (prune from walk)
+                dirnames[:] = [d for d in dirnames if d not in _BACKUP_SKIP_DIRS and not d.startswith(".")]
+                rel_base = os.path.relpath(dirpath, root)
+                if rel_base == ".":
+                    rel_base = ""
+                for name in filenames:
+                    if name in _BACKUP_SKIP_FILES or name.endswith(_BACKUP_SKIP_SUFFIXES):
+                        continue
+                    if name.endswith(".env") or (name.startswith(".env") and name != ".env.example"):
+                        continue
+                    full = os.path.join(dirpath, name)
+                    arcname = os.path.join("thesis-rag", rel_base, name) if rel_base else os.path.join("thesis-rag", name)
+                    zf.write(full, arcname)
+            # Include SQLite database (same file the app uses)
+            db_uri = current_app.config.get("SQLALCHEMY_DATABASE_URI", "")
+            if db_uri.startswith("sqlite:///"):
+                db_path = db_uri.replace("sqlite:///", "", 1).strip()
+                if not os.path.isabs(db_path):
+                    db_path = os.path.join(root, db_path)
+                if os.path.isfile(db_path):
+                    zf.write(db_path, os.path.join("thesis-rag", os.path.basename(db_path)))
+        buf.seek(0)
+        filename = f"thesis-rag-backup-{datetime.now().strftime('%Y%m%d-%H%M')}.zip"
+        return send_file(
+            buf,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name=filename,
+        )
+    except Exception as e:
+        print(f"Backup error: {e}")
+        return jsonify({"message": str(e), "type": "error"}), 500
 
 
 def _apply_settings_update(settings_to_update, preserve_empty_keys=None):
