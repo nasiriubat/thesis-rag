@@ -18,7 +18,8 @@ class User(UserMixin, db.Model):
     files = db.relationship('File', backref='user', lazy=True)
 
     def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
+        # Use pbkdf2 so hashing works on Python builds without hashlib.scrypt (e.g. macOS/LibreSSL)
+        self.password_hash = generate_password_hash(password, method="pbkdf2:sha256")
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
@@ -47,6 +48,8 @@ class File(db.Model):
     embedding = db.Column(db.Text)  # Store the embedding for semantic search
     file_identifier = db.Column(db.String(100))  # ID used to locate embedding files
     original_filename = db.Column(db.String(255))  # Store the uploaded or derived name
+    source = db.Column(db.String(20), nullable=True)  # 'upload' | 'zotero'
+    external_id = db.Column(db.String(255), nullable=True)  # e.g. zotero:user/123/ABC123
 
 # Chat query tracking
 class Query(db.Model):

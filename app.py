@@ -46,7 +46,8 @@ def create_app(config_name='default'):
     @app.before_request
     def update_openai_key():
         if current_user.is_authenticated:
-            openai.api_key = Settings.query.filter_by(key='openai_key').first().value
+            s = Settings.query.filter_by(key='openai_key').first()
+            openai.api_key = (s.value if s and s.value else None)
     
     # Import and register blueprints
     from routes import main as main_blueprint

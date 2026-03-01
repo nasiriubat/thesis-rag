@@ -374,10 +374,11 @@
                                 <input type="checkbox" id="selectAll" class="form-check-input">
                             </th>
                             <th width="5%">ID</th>
-                            <th width="25%">File Name</th>
-                            <th width="30%">Content Preview</th>
-                            <th width="15%">Uploaded By</th>
+                            <th width="23%">File Name</th>
+                            <th width="28%">Content Preview</th>
+                            <th width="12%">Uploaded By</th>
                             <th width="10%">Created At</th>
+                            <th width="7%">Source</th>
                             <th width="10%">Actions</th>
                         </tr>
                     </thead>
@@ -626,6 +627,7 @@
                 </td>
                 <td>${file.user_name}</td>
                 <td>${file.created_at}</td>
+                <td><span class="badge bg-${(file.source || 'upload') === 'zotero' ? 'secondary' : 'primary'}">${(file.source || 'upload') === 'zotero' ? 'Zotero' : 'Upload'}</span></td>
                 <td>
                     <div class="btn-group" role="group">
                         <button class="btn btn-info btn-sm" onclick="viewFileById('${file.id}')" title="View file">

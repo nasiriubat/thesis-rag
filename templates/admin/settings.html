@@ -3,265 +3,295 @@
 {% block extra_css %}
 <link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet">
 <style>
-    .required-field::after {
-        content: " *";
-        color: red;
-    }
-
-    .ck-editor__editable {
-        min-height: 200px;
-    }
-
+    .required-field::after { content: " *"; color: red; }
+    .ck-editor__editable { min-height: 200px; }
     .image-preview {
-        max-width: 200px;
-        max-height: 200px;
-        margin-top: 10px;
-        border-radius: 8px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        max-width: 200px; max-height: 200px; margin-top: 10px;
+        border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
-
     .preview-container {
-        margin-top: 10px;
-        padding: 10px;
-        border: 1px solid #ddd;
-        border-radius: 8px;
-        background: #f8f9fa;
+        margin-top: 10px; padding: 10px;
+        border: 1px solid #dee2e6; border-radius: 8px; background: #f8f9fa;
     }
-
-    .preview-label {
-        font-size: 0.9rem;
-        color: #666;
-        margin-bottom: 5px;
+    .preview-label { font-size: 0.9rem; color: #666; margin-bottom: 5px; }
+    .settings-tabs .nav-link {
+        color: #4e73df; font-weight: 500; border: none; border-bottom: 3px solid transparent;
+        padding: 0.75rem 1.25rem; border-radius: 0.375rem 0.375rem 0 0;
     }
-    
-    /* Mobile responsive adjustments */
+    .settings-tabs .nav-link:hover { background: rgba(78, 115, 223, 0.08); }
+    .settings-tabs .nav-link.active {
+        color: #224abe; background: rgba(78, 115, 223, 0.1);
+        border-bottom-color: #224abe;
+    }
+    .settings-tabs .nav-link i { margin-right: 0.5rem; width: 1.25rem; text-align: center; }
+    .tab-pane { padding: 1.5rem 0; }
+    .password-toggle { cursor: pointer; color: #6c757d; }
+    .password-toggle:hover { color: #224abe; }
+    .key-set-badge { font-size: 0.8rem; }
     @media (max-width: 768px) {
-        .image-preview {
-            max-width: 150px;
-            max-height: 150px;
-        }
-        
-        .preview-container {
-            padding: 8px;
-        }
-        
-        .form-control, .form-select {
-            font-size: 16px; /* Prevents zoom on iOS */
-        }
-        
-        .btn {
-            min-height: 44px;
-            padding: 0.5rem 1rem;
-        }
+        .image-preview { max-width: 150px; max-height: 150px; }
+        .form-control, .form-select { font-size: 16px; }
+        .btn { min-height: 44px; padding: 0.5rem 1rem; }
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid">
-    <h1 class="h3 mb-4 text-gray-800">System Settings</h1>
+    <h1 class="h3 mb-4 text-gray-800">Settings</h1>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
     {% for category, message in messages %}
-    <script>
-        toastr.{ { category } } ('{{ message }}');
-    </script>
+    <script>toastr.{{ category }}('{{ message }}');</script>
     {% endfor %}
     {% endif %}
     {% endwith %}
 
-    <!-- Theme Customization Card -->
-    <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Chat Theme Customization</h6>
+    <ul class="nav nav-tabs settings-tabs mb-3" id="settingsTab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="site-tab" data-bs-toggle="tab" data-bs-target="#site-pane" type="button" role="tab">
+                <i class="fas fa-globe"></i> Site
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="theme-tab" data-bs-toggle="tab" data-bs-target="#theme-pane" type="button" role="tab">
+                <i class="fas fa-palette"></i> Theme
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="api-tab" data-bs-toggle="tab" data-bs-target="#api-pane" type="button" role="tab">
+                <i class="fas fa-key"></i> API
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="pages-tab" data-bs-toggle="tab" data-bs-target="#pages-pane" type="button" role="tab">
+                <i class="fas fa-file-alt"></i> Page content
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="settingsTabContent">
+        <!-- Site -->
+        <div class="tab-pane fade show active" id="site-pane" role="tabpanel">
+            <div class="card shadow">
+                <div class="card-body">
+                    <form id="form-site" method="POST" action="{{ url_for('main.admin_settings') }}" enctype="multipart/form-data">
+                        <input type="hidden" name="settings_section" value="site">
+                        <div class="row">
+                            <div class="col-lg-8 col-md-12 mb-3">
+                                <label for="logo" class="form-label required-field">Application name</label>
+                                <input type="text" class="form-control" id="logo" name="logo" value="{{ settings.get('logo', '') }}" required>
+                            </div>
+                            <div class="col-lg-4 col-md-12 mb-3">
+                                <label for="copyright" class="form-label">Copyright text</label>
+                                <input type="text" class="form-control" id="copyright" name="copyright" value="{{ settings.get('copyright', '') }}" placeholder="e.g. © 2025 My App">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-lg-4 col-md-6 mb-3">
+                                <label for="show_matched_text" class="form-label">Show matched text in answers</label>
+                                <select class="form-select" id="show_matched_text" name="show_matched_text">
+                                    <option value="yes" {% if settings.get('show_matched_text') == 'yes' %}selected{% endif %}>Yes</option>
+                                    <option value="no" {% if settings.get('show_matched_text') == 'no' %}selected{% endif %}>No</option>
+                                </select>
+                            </div>
+                            <div class="col-lg-4 col-md-6 mb-3">
+                                <label for="faq_search_enabled" class="form-label">FAQ search suggestions</label>
+                                <select class="form-select" id="faq_search_enabled" name="faq_search_enabled">
+                                    <option value="yes" {% if settings.get('faq_search_enabled', 'yes') == 'yes' %}selected{% endif %}>Yes</option>
+                                    <option value="no" {% if settings.get('faq_search_enabled', 'yes') == 'no' %}selected{% endif %}>No</option>
+                                </select>
+                            </div>
+                            <div class="col-lg-4 col-md-6 mb-3">
+                                <label for="chunk_number" class="form-label required-field">Similar chunks</label>
+                                <input type="number" class="form-control" id="chunk_number" name="chunk_number" value="{{ settings.get('chunk_number', 3) }}" min="1" max="5" required>
+                            </div>
+                            <div class="col-lg-4 col-md-6 mb-3">
+                                <label for="message_history" class="form-label required-field">Message pairs as context</label>
+                                <input type="number" class="form-control" id="message_history" name="message_history" value="{{ settings.get('message_history', 10) }}" min="1" max="15" required>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-lg-6 col-md-12 mb-3">
+                                <label for="logo_file" class="form-label">Logo image</label>
+                                <input type="file" class="form-control" id="logo_file" name="logo_file" accept="image/*">
+                                <div class="preview-container mt-2">
+                                    <div class="preview-label">Current logo</div>
+                                    {% if settings.get('logo_file') %}
+                                    <img src="{{ url_for('static', filename='uploads/' + settings.get('logo_file')) }}" class="image-preview" id="logoPreview" alt="Logo">
+                                    {% else %}
+                                    <span class="text-muted">No logo uploaded</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-lg-6 col-md-12 mb-3">
+                                <label for="favicon_file" class="form-label">Favicon</label>
+                                <input type="file" class="form-control" id="favicon_file" name="favicon_file" accept="image/*">
+                                <div class="preview-container mt-2">
+                                    <div class="preview-label">Current favicon</div>
+                                    {% if settings.get('favicon_file') %}
+                                    <img src="{{ url_for('static', filename='uploads/' + settings.get('favicon_file')) }}" class="image-preview" id="faviconPreview" alt="Favicon">
+                                    {% else %}
+                                    <span class="text-muted">No favicon uploaded</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button type="submit" class="btn btn-primary">Save site settings</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
         </div>
-        <div class="card-body">
-            <form method="POST" action="{{ url_for('main.admin_settings') }}">
-                <div class="row">
-                    <div class="col-lg-4 col-md-6 mb-3">
-                        <label for="theme_primary_color" class="form-label">Primary Color (Navbar, Buttons)</label>
-                        <div class="input-group">
-                            <input type="color" class="form-control form-control-color" id="theme_primary_color" name="theme_primary_color" value="{{ settings.get('theme_primary_color', '#5b1fa6') }}">
-                            <input type="text" class="form-control" id="theme_primary_color_text" value="{{ settings.get('theme_primary_color', '#5b1fa6') }}" readonly>
-                        </div>
-                        <small class="text-muted">Used for navbar, buttons, and primary accents</small>
-                    </div>
 
-                    <div class="col-lg-4 col-md-6 mb-3">
-                        <label for="theme_secondary_color" class="form-label">Secondary Color (User Messages)</label>
-                        <div class="input-group">
-                            <input type="color" class="form-control form-control-color" id="theme_secondary_color" name="theme_secondary_color" value="{{ settings.get('theme_secondary_color', '#d1aff3') }}">
-                            <input type="text" class="form-control" id="theme_secondary_color_text" value="{{ settings.get('theme_secondary_color', '#d1aff3') }}" readonly>
+        <!-- Theme -->
+        <div class="tab-pane fade" id="theme-pane" role="tabpanel">
+            <div class="card shadow">
+                <div class="card-body">
+                    <form id="form-theme" method="POST" action="{{ url_for('main.admin_settings') }}">
+                        <input type="hidden" name="settings_section" value="theme">
+                        <div class="row">
+                            <div class="col-lg-4 col-md-6 mb-3">
+                                <label for="theme_primary_color" class="form-label">Primary</label>
+                                <div class="input-group">
+                                    <input type="color" class="form-control form-control-color" id="theme_primary_color" name="theme_primary_color" value="{{ settings.get('theme_primary_color', '#5b1fa6') }}">
+                                    <input type="text" class="form-control" id="theme_primary_color_text" value="{{ settings.get('theme_primary_color', '#5b1fa6') }}" readonly>
+                                </div>
+                            </div>
+                            <div class="col-lg-4 col-md-6 mb-3">
+                                <label for="theme_secondary_color" class="form-label">Secondary (user messages)</label>
+                                <div class="input-group">
+                                    <input type="color" class="form-control form-control-color" id="theme_secondary_color" name="theme_secondary_color" value="{{ settings.get('theme_secondary_color', '#d1aff3') }}">
+                                    <input type="text" class="form-control" id="theme_secondary_color_text" value="{{ settings.get('theme_secondary_color', '#d1aff3') }}" readonly>
+                                </div>
+                            </div>
+                            <div class="col-lg-4 col-md-6 mb-3">
+                                <label for="theme_bot_message_color" class="form-label">Bot message</label>
+                                <div class="input-group">
+                                    <input type="color" class="form-control form-control-color" id="theme_bot_message_color" name="theme_bot_message_color" value="{{ settings.get('theme_bot_message_color', '#f3f0fa') }}">
+                                    <input type="text" class="form-control" id="theme_bot_message_color_text" value="{{ settings.get('theme_bot_message_color', '#f3f0fa') }}" readonly>
+                                </div>
+                            </div>
                         </div>
-                        <small class="text-muted">Used for user message bubbles</small>
-                    </div>
-
-                    <div class="col-lg-4 col-md-6 mb-3">
-                        <label for="theme_bot_message_color" class="form-label">Bot Message Color</label>
-                        <div class="input-group">
-                            <input type="color" class="form-control form-control-color" id="theme_bot_message_color" name="theme_bot_message_color" value="{{ settings.get('theme_bot_message_color', '#f3f0fa') }}">
-                            <input type="text" class="form-control" id="theme_bot_message_color_text" value="{{ settings.get('theme_bot_message_color', '#f3f0fa') }}" readonly>
+                        <div class="row">
+                            <div class="col-lg-4 col-md-6 mb-3">
+                                <label for="theme_background_start" class="form-label">Background start</label>
+                                <div class="input-group">
+                                    <input type="color" class="form-control form-control-color" id="theme_background_start" name="theme_background_start" value="{{ settings.get('theme_background_start', '#f5f0ff') }}">
+                                    <input type="text" class="form-control" id="theme_background_start_text" value="{{ settings.get('theme_background_start', '#f5f0ff') }}" readonly>
+                                </div>
+                            </div>
+                            <div class="col-lg-4 col-md-6 mb-3">
+                                <label for="theme_background_end" class="form-label">Background end</label>
+                                <div class="input-group">
+                                    <input type="color" class="form-control form-control-color" id="theme_background_end" name="theme_background_end" value="{{ settings.get('theme_background_end', '#ede3f7') }}">
+                                    <input type="text" class="form-control" id="theme_background_end_text" value="{{ settings.get('theme_background_end', '#ede3f7') }}" readonly>
+                                </div>
+                            </div>
+                            <div class="col-lg-4 col-md-6 mb-3">
+                                <label for="theme_accent_color" class="form-label">Accent</label>
+                                <div class="input-group">
+                                    <input type="color" class="form-control form-control-color" id="theme_accent_color" name="theme_accent_color" value="{{ settings.get('theme_accent_color', '#5b1fa6') }}">
+                                    <input type="text" class="form-control" id="theme_accent_color_text" value="{{ settings.get('theme_accent_color', '#5b1fa6') }}" readonly>
+                                </div>
+                            </div>
                         </div>
-                        <small class="text-muted">Used for bot message bubbles</small>
-                    </div>
+                        <div class="mt-3 d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">Save theme</button>
+                            <button type="button" class="btn btn-outline-secondary" onclick="resetThemeDefaults()">Reset to defaults</button>
+                        </div>
+                    </form>
                 </div>
+            </div>
+        </div>
 
-                <div class="row">
-                    <div class="col-lg-4 col-md-6 mb-3">
-                        <label for="theme_background_start" class="form-label">Background Gradient Start</label>
-                        <div class="input-group">
-                            <input type="color" class="form-control form-control-color" id="theme_background_start" name="theme_background_start" value="{{ settings.get('theme_background_start', '#f5f0ff') }}">
-                            <input type="text" class="form-control" id="theme_background_start_text" value="{{ settings.get('theme_background_start', '#f5f0ff') }}" readonly>
+        <!-- API -->
+        <div class="tab-pane fade" id="api-pane" role="tabpanel">
+            <div class="card shadow">
+                <div class="card-body">
+                    <form id="form-api" method="POST" action="{{ url_for('main.admin_settings') }}">
+                        <input type="hidden" name="settings_section" value="api">
+                        <div class="mb-4">
+                            <h6 class="text-muted border-bottom pb-2">OpenAI</h6>
+                            <div class="row">
+                                <div class="col-lg-8 col-md-12 mb-3">
+                                    <label for="openai_key" class="form-label">OpenAI API key</label>
+                                    <div class="input-group">
+                                        <input type="password" class="form-control" id="openai_key" name="openai_key" autocomplete="off"
+                                            placeholder="{% if openai_key_set %}Leave blank to keep current key{% else %}Enter your API key{% endif %}">
+                                        <button type="button" class="btn btn-outline-secondary password-toggle" id="toggle_openai_key" title="Show/hide">
+                                            <i class="fas fa-eye" id="icon_openai_key"></i>
+                                        </button>
+                                    </div>
+                                    {% if openai_key_set %}
+                                    <span class="badge bg-success key-set-badge mt-1">Key is set</span>
+                                    {% endif %}
+                                </div>
+                                <div class="col-lg-4 col-md-12 mb-3">
+                                    <label for="openai_model" class="form-label required-field">Model</label>
+                                    <select class="form-select" id="openai_model" name="openai_model" required>
+                                        {% for model in models %}
+                                        <option value="{{ model }}" {% if settings.get('openai_model') == model %}selected{% endif %}>{{ model }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
                         </div>
-                        <small class="text-muted">Starting color of background gradient</small>
-                    </div>
-
-                    <div class="col-lg-4 col-md-6 mb-3">
-                        <label for="theme_background_end" class="form-label">Background Gradient End</label>
-                        <div class="input-group">
-                            <input type="color" class="form-control form-control-color" id="theme_background_end" name="theme_background_end" value="{{ settings.get('theme_background_end', '#ede3f7') }}">
-                            <input type="text" class="form-control" id="theme_background_end_text" value="{{ settings.get('theme_background_end', '#ede3f7') }}" readonly>
+                        <div id="zotero">
+                            <h6 class="text-muted border-bottom pb-2">Zotero (optional)</h6>
+                            <p class="small text-muted">Sync PDF, DOCX, TXT from My Library and shared groups. <a href="https://www.zotero.org/settings/keys" target="_blank" rel="noopener">Get API key &amp; User ID</a>.</p>
+                            <div class="row">
+                                <div class="col-lg-6 col-md-12 mb-3">
+                                    <label for="zotero_api_key" class="form-label">Zotero API key</label>
+                                    <div class="input-group">
+                                        <input type="password" class="form-control" id="zotero_api_key" name="zotero_api_key" autocomplete="off"
+                                            placeholder="{% if zotero_api_key_set %}Leave blank to keep current{% else %}Private key{% endif %}">
+                                        <button type="button" class="btn btn-outline-secondary password-toggle" id="toggle_zotero_api_key" title="Show/hide">
+                                            <i class="fas fa-eye" id="icon_zotero_api_key"></i>
+                                        </button>
+                                    </div>
+                                    {% if zotero_api_key_set %}
+                                    <span class="badge bg-success key-set-badge mt-1">Key is set</span>
+                                    {% endif %}
+                                </div>
+                                <div class="col-lg-6 col-md-12 mb-3">
+                                    <label for="zotero_user_id" class="form-label">Zotero User ID</label>
+                                    <input type="text" class="form-control" id="zotero_user_id" name="zotero_user_id" value="{{ settings.get('zotero_user_id', '') }}" placeholder="Numeric user ID">
+                                </div>
+                            </div>
                         </div>
-                        <small class="text-muted">Ending color of background gradient</small>
-                    </div>
-
-                    <div class="col-lg-4 col-md-6 mb-3">
-                        <label for="theme_accent_color" class="form-label">Accent Color (Links, Icons)</label>
-                        <div class="input-group">
-                            <input type="color" class="form-control form-control-color" id="theme_accent_color" name="theme_accent_color" value="{{ settings.get('theme_accent_color', '#5b1fa6') }}">
-                            <input type="text" class="form-control" id="theme_accent_color_text" value="{{ settings.get('theme_accent_color', '#5b1fa6') }}" readonly>
+                        <div class="mt-3">
+                            <button type="submit" class="btn btn-primary">Save API settings</button>
                         </div>
-                        <small class="text-muted">Used for links and accent elements</small>
-                    </div>
+                    </form>
                 </div>
+            </div>
+        </div>
 
-                <div class="row">
-                    <div class="col-12">
-                        <div class="alert alert-info">
-                            <i class="fas fa-info-circle me-2"></i>
-                            <strong>Preview:</strong> Changes will be applied to the public chat interface after saving. Use the color pickers to customize the theme for your client.
+        <!-- Page content (About & Contact) -->
+        <div class="tab-pane fade" id="pages-pane" role="tabpanel">
+            <div class="card shadow">
+                <div class="card-body">
+                    <form id="form-pages" method="POST" action="{{ url_for('main.admin_settings') }}">
+                        <input type="hidden" name="settings_section" value="pages">
+                        <div class="mb-4">
+                            <label for="about" class="form-label">About page content</label>
+                            <textarea class="form-control" id="about" name="about" rows="6" placeholder="About page content...">{{ settings.get('about', '') }}</textarea>
                         </div>
-                    </div>
+                        <div class="mb-4">
+                            <label for="contact" class="form-label">Contact page content</label>
+                            <textarea class="form-control" id="contact" name="contact" rows="4" placeholder="Contact page content...">{{ settings.get('contact', '') }}</textarea>
+                        </div>
+                        <div class="mt-3">
+                            <button type="submit" class="btn btn-primary">Save page content</button>
+                        </div>
+                    </form>
                 </div>
-
-                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                    <button type="button" class="btn btn-outline-secondary me-2" onclick="resetToDefaults()">
-                        <i class="fas fa-undo me-2"></i>Reset to Defaults
-                    </button>
-                    <button type="submit" class="btn btn-primary btn-lg">Save Theme Settings</button>
-                </div>
-            </form>
+            </div>
         </div>
     </div>
-    <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">General Settings</h6>
-        </div>
-        <div class="card-body">
-            <form method="POST" action="{{ url_for('main.admin_settings') }}" enctype="multipart/form-data">
-                <div class="row">
-                    <div class="col-lg-8 col-md-12 mb-3">
-                        <label for="logo" class="form-label required-field">Application Name</label>
-                        <input type="text" class="form-control" id="logo" name="logo" value="{{ settings.get('logo', '') }}"
-                            required>
-                    </div>
-                    
-                    <div class="col-lg-4 col-md-12 mb-3">
-                        <label for="show_matched_text" class="form-label">Show Matched Text</label>
-                        <select class="form-select" id="show_matched_text" name="show_matched_text">
-                            <option value="yes" {% if settings.get('show_matched_text') == 'yes' %}selected{% endif %}>Yes</option>
-                            <option value="no" {% if settings.get('show_matched_text') == 'no' %}selected{% endif %}>No</option>
-                        </select>
-                    </div>
-                    <div class="col-lg-4 col-md-12 mb-3">
-                        <label for="faq_search_enabled" class="form-label">Enable FAQ Search Suggestions</label>
-                        <select class="form-select" id="faq_search_enabled" name="faq_search_enabled">
-                            <option value="yes" {% if settings.get('faq_search_enabled', 'yes') == 'yes' %}selected{% endif %}>Yes</option>
-                            <option value="no" {% if settings.get('faq_search_enabled', 'yes') == 'no' %}selected{% endif %}>No</option>
-                        </select>
-                        <small class="text-muted">Show similar FAQ questions as users type</small>
-                    </div>
-                    <div class="col-lg-4 col-md-12 mb-3">
-                        <label for="chunk_number" class="form-label required-field">Similar Chunks</label>
-                        <input type="number" class="form-control" id="chunk_number" max=5 min=1 name="chunk_number" value="{{ settings.get('chunk_number', 3) }}"
-                            required>
-                    </div>
-                    <div class="col-lg-4 col-md-12 mb-3">
-                        <label for="message_history" class="form-label required-field">Message as Context (in pairs)</label>
-                        <input type="number" class="form-control" id="message_history" max=15 min=1 name="message_history" value="{{ settings.get('message_history', 10) }}"
-                            required>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-lg-6 col-md-12 mb-3">
-                        <label for="logo_file" class="form-label">Logo Image</label>
-                        <input type="file" class="form-control" id="logo_file" name="logo_file" accept="image/*">
-                        <div class="preview-container">
-                            <div class="preview-label">Current Logo:</div>
-                            {% if settings.get('logo_file') %}
-                            <img src="{{ url_for('static', filename='uploads/' + settings.get('logo_file')) }}"
-                                class="image-preview" id="logoPreview">
-                            {% else %}
-                            <div class="text-muted">No logo uploaded</div>
-                            {% endif %}
-                        </div>
-                    </div>
-
-                    <div class="col-lg-6 col-md-12 mb-3">
-                        <label for="favicon_file" class="form-label">Favicon</label>
-                        <input type="file" class="form-control" id="favicon_file" name="favicon_file" accept="image/*">
-                        <div class="preview-container">
-                            <div class="preview-label">Current Favicon:</div>
-                            {% if settings.get('favicon_file') %}
-                            <img src="{{ url_for('static', filename='uploads/' + settings.get('favicon_file')) }}"
-                                class="image-preview" id="faviconPreview">
-                            {% else %}
-                            <div class="text-muted">No favicon uploaded</div>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-
-                <div class="row">
-                    <div class="col-lg-6 col-md-12 mb-3">
-                        <label for="openai_key" class="form-label required-field">OpenAI API Key</label>
-                        <input type="password" class="form-control" id="openai_key" name="openai_key"
-                            value="{{ settings.get('openai_key', '') }}" required>
-                    </div>
-                    <div class="col-lg-6 col-md-12 mb-3">
-                        <label for="openai_model" class="form-label required-field">OpenAI Model</label>
-                        <select class="form-select" id="openai_model" name="openai_model" required>
-                            {% for model in models %}
-                            <option value="{{ model }}" {% if settings.get('openai_model')==model %}selected{% endif %}>
-                                {{ model }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <label for="copyright" class="form-label">Copyright Text</label>
-                    <input type="text" class="form-control" id="copyright" name="copyright"
-                        value="{{ settings.get('copyright', '') }}" placeholder="Enter copyright text...">
-                </div>
-                <div class="mb-3">
-                    <label for="about" class="form-label">About Page Content</label>
-                    <textarea class="form-control" id="about" name="about" rows="4" placeholder="Enter about page content...">{{ settings.get('about', '') }}</textarea>
-                </div>
-                <div class="mb-3">
-                    <label for="contact" class="form-label">Contact Page Content</label>
-                    <textarea class="form-control" id="contact" name="contact" rows="3" placeholder="Enter contact page content...">{{ settings.get('contact', '') }}</textarea>
-                </div>
-                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                    <button type="submit" class="btn btn-primary btn-lg">Save Settings</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
 </div>
 {% endblock %}
 
@@ -269,50 +299,25 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
 <script src="https://cdn.ckeditor.com/ckeditor5/40.1.0/classic/ckeditor.js"></script>
 <script>
-    // Initialize CKEditor for both textareas
-    ClassicEditor
-        .create(document.querySelector('#about'), {
-            toolbar: ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', '|', 'undo', 'redo'],
-            placeholder: 'Enter about page content here...'
-        })
-        .catch(error => {
-            console.error(error);
-        });
-
-    ClassicEditor
-        .create(document.querySelector('#contact'), {
-            toolbar: ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', '|', 'undo', 'redo'],
-            placeholder: 'Enter contact page content here...'
-        })
-        .catch(error => {
-            console.error(error);
-        });
-
-    // Image preview functionality
+(function() {
+    // Image preview
     function previewImage(input, previewId) {
         if (input.files && input.files[0]) {
-            const reader = new FileReader();
-            reader.onload = function (e) {
-                const preview = document.getElementById(previewId);
-                if (preview) {
-                    preview.src = e.target.result;
-                    preview.style.display = 'block';
-                }
-            }
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var el = document.getElementById(previewId);
+                if (el) { el.src = e.target.result; el.style.display = 'block'; }
+            };
             reader.readAsDataURL(input.files[0]);
         }
     }
+    var logoFile = document.getElementById('logo_file');
+    var faviconFile = document.getElementById('favicon_file');
+    if (logoFile) logoFile.addEventListener('change', function() { previewImage(this, 'logoPreview'); });
+    if (faviconFile) faviconFile.addEventListener('change', function() { previewImage(this, 'faviconPreview'); });
 
-    document.getElementById('logo_file').addEventListener('change', function () {
-        previewImage(this, 'logoPreview');
-    });
-
-    document.getElementById('favicon_file').addEventListener('change', function () {
-        previewImage(this, 'faviconPreview');
-    });
-
-    // Color picker synchronization
-    const colorInputs = [
+    // Theme color sync
+    var colorInputs = [
         { picker: 'theme_primary_color', text: 'theme_primary_color_text' },
         { picker: 'theme_secondary_color', text: 'theme_secondary_color_text' },
         { picker: 'theme_bot_message_color', text: 'theme_bot_message_color_text' },
@@ -320,79 +325,114 @@
         { picker: 'theme_background_end', text: 'theme_background_end_text' },
         { picker: 'theme_accent_color', text: 'theme_accent_color_text' }
     ];
-
-    colorInputs.forEach(input => {
-        const picker = document.getElementById(input.picker);
-        const text = document.getElementById(input.text);
-        
-        if (picker && text) {
-            picker.addEventListener('input', function() {
-                text.value = this.value.toUpperCase();
-            });
-        }
+    colorInputs.forEach(function(p) {
+        var picker = document.getElementById(p.picker);
+        var text = document.getElementById(p.text);
+        if (picker && text) picker.addEventListener('input', function() { text.value = this.value; });
     });
 
-    // Reset to defaults function
-    window.resetToDefaults = function() {
-        if (confirm('Are you sure you want to reset all theme colors to default values?')) {
-            document.getElementById('theme_primary_color').value = '#5b1fa6';
-            document.getElementById('theme_primary_color_text').value = '#5b1fa6';
-            document.getElementById('theme_secondary_color').value = '#d1aff3';
-            document.getElementById('theme_secondary_color_text').value = '#d1aff3';
-            document.getElementById('theme_bot_message_color').value = '#f3f0fa';
-            document.getElementById('theme_bot_message_color_text').value = '#f3f0fa';
-            document.getElementById('theme_background_start').value = '#f5f0ff';
-            document.getElementById('theme_background_start_text').value = '#f5f0ff';
-            document.getElementById('theme_background_end').value = '#ede3f7';
-            document.getElementById('theme_background_end_text').value = '#ede3f7';
-            document.getElementById('theme_accent_color').value = '#5b1fa6';
-            document.getElementById('theme_accent_color_text').value = '#5b1fa6';
-            toastr.info('Theme colors reset to defaults. Click "Save Theme Settings" to apply changes.');
-        }
+    window.resetThemeDefaults = function() {
+        if (!confirm('Reset all theme colors to defaults?')) return;
+        var def = {
+            theme_primary_color: '#5b1fa6',
+            theme_secondary_color: '#d1aff3',
+            theme_bot_message_color: '#f3f0fa',
+            theme_background_start: '#f5f0ff',
+            theme_background_end: '#ede3f7',
+            theme_accent_color: '#5b1fa6'
+        };
+        Object.keys(def).forEach(function(k) {
+            var p = document.getElementById(k);
+            var t = document.getElementById(k + '_text');
+            if (p) { p.value = def[k]; }
+            if (t) { t.value = def[k]; }
+        });
+        toastr.info('Click "Save theme" to apply.');
     };
 
-    // Handle form submissions
-    document.querySelectorAll('form').forEach(form => {
-        form.addEventListener('submit', function (e) {
+    // Password show/hide (only toggles visibility of what user types; never exposes stored key)
+    function setupPasswordToggle(inputId, iconId) {
+        var input = document.getElementById(inputId);
+        var icon = document.getElementById(iconId);
+        if (!input || !icon) return;
+        icon.closest('button').addEventListener('click', function() {
+            var isPass = input.type === 'password';
+            input.type = isPass ? 'text' : 'password';
+            icon.className = isPass ? 'fas fa-eye-slash' : 'fas fa-eye';
+        });
+    }
+    setupPasswordToggle('openai_key', 'icon_openai_key');
+    setupPasswordToggle('zotero_api_key', 'icon_zotero_api_key');
+
+    // CKEditor for pages (init after tab might be shown to avoid height issues)
+    var aboutEditor, contactEditor;
+    function initEditors() {
+        if (aboutEditor) return;
+        var aboutEl = document.querySelector('#about');
+        var contactEl = document.querySelector('#contact');
+        if (aboutEl && !aboutEditor) {
+            ClassicEditor.create(aboutEl, {
+                toolbar: ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', '|', 'undo', 'redo'],
+                placeholder: 'About page content...'
+            }).then(function(editor) { aboutEditor = editor; }).catch(console.error);
+        }
+        if (contactEl && !contactEditor) {
+            ClassicEditor.create(contactEl, {
+                toolbar: ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', '|', 'undo', 'redo'],
+                placeholder: 'Contact page content...'
+            }).then(function(editor) { contactEditor = editor; }).catch(console.error);
+        }
+    }
+    document.getElementById('pages-tab').addEventListener('shown.bs.tab', initEditors);
+    if (document.querySelector('#pages-pane.active')) initEditors();
+    // Open API tab when linking to #zotero (e.g. from Zotero admin page)
+    if (window.location.hash === '#zotero') {
+        var apiTab = document.getElementById('api-tab');
+        if (apiTab) new bootstrap.Tab(apiTab).show();
+    }
+
+    // Form submit: only send this form's data; show loading on its button
+    function handleSubmit(form, getExtraData) {
+        form.addEventListener('submit', function(e) {
             e.preventDefault();
-            const formData = new FormData(this);
-
-            // Get content from CKEditor instances if they exist
-            const aboutEditor = document.querySelector('#about');
-            const contactEditor = document.querySelector('#contact');
-            if (aboutEditor) {
-                formData.set('about', aboutEditor.value);
-            }
-            if (contactEditor) {
-                formData.set('contact', contactEditor.value);
-            }
-
-            // Show loading state
-            const submitButton = this.querySelector('button[type="submit"]');
-            const originalText = submitButton.innerHTML;
-            submitButton.disabled = true;
-            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-
-            fetch(this.action, {
-                method: 'POST',
-                body: formData
-            }).then(response => response.json())
-                .then(data => {
+            var formData = new FormData(form);
+            if (getExtraData) getExtraData(formData);
+            var btn = form.querySelector('button[type="submit"]');
+            var origHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i> Saving...';
+            fetch(form.action, { method: 'POST', body: formData })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
                     if (data.type === 'success') {
                         toastr.success(data.message);
-                        setTimeout(() => window.location.reload(), 1500);
+                        setTimeout(function() { window.location.reload(); }, 1200);
                     } else {
-                        toastr.error(data.message);
-                        submitButton.disabled = false;
-                        submitButton.innerHTML = originalText;
+                        toastr.error(data.message || 'Error saving');
+                        btn.disabled = false;
+                        btn.innerHTML = origHtml;
                     }
                 })
-                .catch(error => {
-                    toastr.error('An error occurred while saving settings');
-                    submitButton.disabled = false;
-                    submitButton.innerHTML = originalText;
+                .catch(function() {
+                    toastr.error('Error saving settings');
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
                 });
         });
+    }
+
+    handleSubmit(document.getElementById('form-site'));
+    handleSubmit(document.getElementById('form-theme'));
+    handleSubmit(document.getElementById('form-api'));
+    handleSubmit(document.getElementById('form-pages'), function(formData) {
+        var aboutVal, contactVal;
+        if (typeof aboutEditor !== 'undefined' && aboutEditor) aboutVal = aboutEditor.getData();
+        else { var el = document.getElementById('about'); aboutVal = (el && el.value != null) ? el.value : ''; }
+        if (aboutVal != null && aboutVal !== undefined) formData.set('about', aboutVal);
+        if (typeof contactEditor !== 'undefined' && contactEditor) contactVal = contactEditor.getData();
+        else { var el2 = document.getElementById('contact'); contactVal = (el2 && el2.value != null) ? el2.value : ''; }
+        if (contactVal != null && contactVal !== undefined) formData.set('contact', contactVal);
     });
+})();
 </script>
 {% endblock %}
