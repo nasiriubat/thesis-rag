@@ -7,7 +7,8 @@ import numpy as np
 import uuid
 from flask import current_app
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
+from collections import Counter
 from tqdm import tqdm
 import tiktoken
 import json
@@ -24,9 +25,80 @@ model = SentenceTransformer('all-MiniLM-L6-v2')
 
 # Initialize tiktoken
 encoding = tiktoken.encoding_for_model("text-embedding-ada-002")
+try:
+    completion_encoding = tiktoken.encoding_for_model("gpt-3.5-turbo")
+except KeyError:
+    completion_encoding = tiktoken.get_encoding("cl100k_base")
 MAX_TOKENS = 500  # Smaller chunks for more precise matching
 OVERLAP = 100
 MIN_SCORE_THRESHOLD = 0.3  # Base threshold for all content types
+
+
+def estimate_text_tokens(text: str) -> int:
+    if not text:
+        return 0
+    try:
+        return len(completion_encoding.encode(text))
+    except Exception:
+        return len(text.split())
+
+
+def truncate_text_to_tokens(text: str, token_budget: int) -> str:
+    if not text or token_budget <= 0:
+        return ""
+    try:
+        tokens = completion_encoding.encode(text)
+        if len(tokens) <= token_budget:
+            return text
+        truncated_tokens = tokens[:token_budget]
+        return completion_encoding.decode(truncated_tokens)
+    except Exception:
+        return text[: token_budget * 4]
+
+
+def extract_chunk_metadata(chunk: str, index: int) -> Dict[str, Any]:
+    words = re.findall(r"\w+", chunk)
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", chunk) if s.strip()]
+    headings = [
+        line.strip()
+        for line in chunk.splitlines()
+        if line.strip() and (line.strip().startswith(("#", "-", "•")) or line.isupper())
+    ]
+    return {
+        "index": index,
+        "token_count": len(encoding.encode(chunk)),
+        "char_count": len(chunk),
+        "word_count": len(words),
+        "sentence_count": len(sentences),
+        "headings": headings[:5],
+        "preview": chunk[:200],
+    }
+
+
+def extract_document_metadata(text: str, chunks: List[str]) -> Dict[str, Any]:
+    words = [w.lower() for w in re.findall(r"\w+", text) if len(w) > 3]
+    keyword_counts = Counter(words)
+    keywords = [w for w, _ in keyword_counts.most_common(12)]
+    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
+    summary_sentences = sentences[:3]
+    summary = " ".join(summary_sentences)
+    if not summary:
+        summary = text[:600]
+    headings = [
+        line.strip()
+        for line in text.splitlines()
+        if line.strip()
+        and len(line.strip()) < 120
+        and (line.strip().startswith(("#", "-", "•")) or line.isupper())
+    ]
+    return {
+        "token_count": len(encoding.encode(text)),
+        "char_count": len(text),
+        "chunk_count": len(chunks),
+        "keywords": keywords,
+        "headings": headings[:10],
+        "summary": summary,
+    }
 
 def get_openai_key():
     """Get OpenAI API key from current app context."""
@@ -126,10 +198,12 @@ def generate_and_store_embeddings(text: str) -> Optional[str]:
     
     # Generate embeddings for all chunks
     embeddings = []
+    chunk_metadatas: List[Dict[str, Any]] = []
     for i, chunk in enumerate(tqdm(chunks, desc="Generating embeddings")):
         embedding = create_embedding(chunk)
         if embedding is not None:
             embeddings.append(embedding)
+            chunk_metadatas.append(extract_chunk_metadata(chunk, i))
             # print(f"Debug - Generated embedding {i+1}/{len(chunks)}")
         else:
             print(f"Debug - Failed to generate embedding for chunk {i+1}")
@@ -150,9 +224,12 @@ def generate_and_store_embeddings(text: str) -> Optional[str]:
         
         # Save chunks and metadata
         chunks_file = EMBEDDINGS_FOLDER / f"{file_id}_chunks.json"
+        document_metadata = extract_document_metadata(text, chunks)
         with open(chunks_file, 'w', encoding='utf-8') as f:
             json.dump({
                 'chunks': chunks,
+                'metadata': chunk_metadatas,
+                'document_metadata': document_metadata,
                 'file_id': file_id
             }, f, ensure_ascii=False)
         # print(f"Debug - Saved chunks to {chunks_file}")
@@ -162,7 +239,7 @@ def generate_and_store_embeddings(text: str) -> Optional[str]:
         print(f"Error storing embeddings: {e}")
         return None
 
-def load_embeddings_and_chunks(file_id: str) -> tuple[Optional[np.ndarray], Optional[List[str]]]:
+def load_embeddings_and_chunks(file_id: str) -> tuple[Optional[np.ndarray], Optional[List[str]], List[Dict[str, Any]]]:
     try:
         # Load embeddings
         embeddings_file = EMBEDDINGS_FOLDER / f"{file_id}_embeddings.npy"
@@ -173,14 +250,87 @@ def load_embeddings_and_chunks(file_id: str) -> tuple[Optional[np.ndarray], Opti
         with open(chunks_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
             chunks = data['chunks']
+            metadata = data.get('metadata', [])
         
         # print(f"Debug - Loaded {len(chunks)} chunks for file_id: {file_id}")
-        return embeddings, chunks
+        return embeddings, chunks, metadata
     except Exception as e:
         print(f"Error loading embeddings and chunks for {file_id}: {e}")
-        return None, None
+        return None, None, []
 
-def search_across_indices(query: str, file_ids: List[str], top_k: int = 5) -> List[Dict]:
+
+def load_document_metadata(file_id: str) -> Dict[str, Any]:
+    try:
+        chunks_file = EMBEDDINGS_FOLDER / f"{file_id}_chunks.json"
+        with open(chunks_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data.get('document_metadata', {})
+    except Exception as e:
+        print(f"Error loading document metadata for {file_id}: {e}")
+        return {}
+
+def _clean_candidate(result: Dict[str, Any]) -> Dict[str, Any]:
+    cleaned = result.copy()
+    cleaned.pop("embedding_vector", None)
+    cleaned.pop("base_similarity", None)
+    return cleaned
+
+
+def mmr_rerank(
+    candidates: List[Dict[str, Any]],
+    query_embedding: np.ndarray,
+    top_k: int,
+    lambda_mult: float = 0.65,
+) -> List[Dict[str, Any]]:
+    if not candidates:
+        return []
+
+    if len(candidates) <= top_k:
+        return sorted([
+            _clean_candidate(candidate)
+            for candidate in candidates
+        ], key=lambda x: x.get("score", 0), reverse=True)
+
+    candidate_embeddings = np.array([c["embedding_vector"] for c in candidates])
+    similarity_to_query = cosine_similarity([query_embedding], candidate_embeddings)[0]
+
+    selected_indices: List[int] = []
+    candidate_indices = list(range(len(candidates)))
+
+    while candidate_indices and len(selected_indices) < top_k:
+        if not selected_indices:
+            best_idx = int(np.argmax(similarity_to_query))
+            candidate_indices.remove(best_idx)
+            selected_indices.append(best_idx)
+            continue
+
+        mmr_scores = []
+        selected_embeddings = candidate_embeddings[selected_indices]
+        for idx in candidate_indices:
+            diversity = cosine_similarity(
+                [candidate_embeddings[idx]],
+                selected_embeddings
+            )[0].max()
+            mmr_score = lambda_mult * similarity_to_query[idx] - (1 - lambda_mult) * diversity
+            mmr_scores.append((mmr_score, idx))
+
+        mmr_scores.sort(key=lambda x: x[0], reverse=True)
+        best_idx = mmr_scores[0][1]
+        candidate_indices.remove(best_idx)
+        selected_indices.append(best_idx)
+
+    selected_results = [_clean_candidate(candidates[idx]) for idx in selected_indices]
+    return sorted(selected_results, key=lambda x: x.get("score", 0), reverse=True)
+
+
+def search_across_indices(
+    query: str,
+    file_ids: List[str],
+    top_k: int = 5,
+    fetch_multiplier: int = 3,
+    lambda_mult: float = 0.65,
+    max_candidates: int = 100,
+) -> List[Dict[str, Any]]:
     try:
         # print(f"Debug - Searching for query: {query}")
         # print(f"Debug - Searching across {len(file_ids)} files")
@@ -191,10 +341,11 @@ def search_across_indices(query: str, file_ids: List[str], top_k: int = 5) -> Li
             return []
         
         all_results = []
+        per_file_limit = max(top_k * fetch_multiplier, top_k)
         
         # Search in each file's embeddings
         for file_id in file_ids:
-            embeddings, chunks = load_embeddings_and_chunks(file_id)
+            embeddings, chunks, metadata_list = load_embeddings_and_chunks(file_id)
             if embeddings is None or chunks is None:
                 continue
             
@@ -202,7 +353,7 @@ def search_across_indices(query: str, file_ids: List[str], top_k: int = 5) -> Li
             similarities = cosine_similarity([query_embedding], embeddings)[0]
             
             # Get top k results
-            top_indices = np.argsort(similarities)[-top_k:][::-1]
+            top_indices = np.argsort(similarities)[-per_file_limit:][::-1]
             
             for idx in top_indices:
                 base_score = float(similarities[idx])
@@ -211,17 +362,26 @@ def search_across_indices(query: str, file_ids: List[str], top_k: int = 5) -> Li
                 relevance_score = calculate_relevance_score(chunks[idx], query, base_score)
                 
                 if relevance_score >= MIN_SCORE_THRESHOLD:
+                    chunk_metadata = metadata_list[idx] if idx < len(metadata_list) else {}
                     all_results.append({
                         "file_id": file_id,
                         "chunk": chunks[idx],
                         "distance": 1 - base_score,  # Convert similarity to distance
-                        "score": relevance_score
+                        "score": relevance_score,
+                        "metadata": chunk_metadata,
+                        "embedding_vector": embeddings[idx],
+                        "base_similarity": base_score,
                     })
         
         # Sort all results by score and return top_k
         all_results.sort(key=lambda x: x["score"], reverse=True)
-        # print(f"Debug - Found {len(all_results)} results above threshold")
-        return all_results[:top_k]
+        if not all_results:
+            return []
+
+        capped_candidates = all_results[: min(len(all_results), max(top_k * fetch_multiplier, top_k, max_candidates))]
+        reranked_results = mmr_rerank(capped_candidates, query_embedding, top_k, lambda_mult=lambda_mult)
+        # print(f"Debug - Found {len(reranked_results)} results above threshold")
+        return reranked_results
     except Exception as e:
         print(f"Error searching: {e}")
         return []

@@ -22,6 +22,9 @@ from embed_and_search import (
     search_across_indices,
     split_into_chunks,
     create_embedding,
+    load_document_metadata,
+    estimate_text_tokens,
+    truncate_text_to_tokens,
 )
 from openai import OpenAI
 import json
@@ -47,6 +50,98 @@ except ImportError:
 
 # Create blueprint
 main = Blueprint("main", __name__)
+
+
+CONTEXT_WINDOW_BY_MODEL = {
+    "gpt-4o": 128000,
+    "gpt-4-turbo": 128000,
+    "gpt-4.1": 128000,
+    "gpt-4": 8192,
+    "gpt-3.5-turbo": 16385,
+    "gpt-3.5-turbo-16k": 16385,
+    "gpt-3.5": 4096,
+}
+
+BROAD_QUERY_KEYWORDS = {
+    "all",
+    "every",
+    "list",
+    "show",
+    "provide",
+    "catalog",
+    "directory",
+    "overview",
+    "summary",
+}
+
+FALLBACK_MESSAGES = {
+    "fi": "Valitettavasti en löytänyt tarkkaa vastausta kysymykseesi. Olen tallentanut sen ja tiimimme tarkistaa sen.",
+    "en": "I'm sorry, I couldn't find a specific answer to your question. I've noted it down and our team will review it.",
+}
+
+
+def get_model_context_window(model_name: str) -> int:
+    if not model_name:
+        return 4000
+    model_name = model_name.lower()
+    for key, value in CONTEXT_WINDOW_BY_MODEL.items():
+        if model_name.startswith(key):
+            return value
+    return CONTEXT_WINDOW_BY_MODEL.get(model_name, 4000)
+
+
+def is_broad_query(question: str) -> bool:
+    lowered = (question or "").lower()
+    return any(keyword in lowered for keyword in BROAD_QUERY_KEYWORDS)
+
+
+def build_context_entries(results, file_id_to_title, token_budget):
+    entries = []
+    total_tokens = 0
+
+    for result in results:
+        title = file_id_to_title.get(result["file_id"]) if result.get("file_id") else None
+        if not title:
+            continue
+
+        remaining_budget = token_budget - total_tokens
+        if remaining_budget <= 0:
+            break
+
+        prefix = f"Relevant content from {title}:\n"
+        prefix_tokens = estimate_text_tokens(prefix)
+        if prefix_tokens >= remaining_budget:
+            break
+
+        chunk_text = result.get("chunk", "")
+        available_for_chunk = remaining_budget - prefix_tokens
+        chunk_tokens = estimate_text_tokens(chunk_text)
+
+        chunk_to_use = chunk_text
+        if chunk_tokens > available_for_chunk:
+            if entries:
+                break
+            chunk_to_use = truncate_text_to_tokens(chunk_text, available_for_chunk)
+            chunk_tokens = estimate_text_tokens(chunk_to_use)
+            if not chunk_tokens:
+                break
+
+        section_text = prefix + chunk_to_use
+        section_tokens = prefix_tokens + chunk_tokens
+
+        if section_tokens > remaining_budget and entries:
+            break
+
+        result_copy = result.copy()
+        result_copy["chunk"] = chunk_to_use
+        entries.append({
+            "result": result_copy,
+            "content": section_text,
+            "tokens": section_tokens,
+        })
+        total_tokens += section_tokens
+
+    return entries, total_tokens
 
 
 # Public routes
@@ -139,6 +234,8 @@ def chat():
                 400,
             )
 
+        fallback_message = FALLBACK_MESSAGES.get(language, FALLBACK_MESSAGES["en"])
+
         # 3. Search across file embeddings
         files = File.query.all()
         file_ids = [f.file_identifier for f in files if f.file_identifier]
@@ -148,73 +245,142 @@ def chat():
 
         if not file_ids:
             return handle_no_content(question, language)
-        # get chunk number from settings
-        chunk_number = Settings.query.filter_by(key="chunk_number").first()
-        chunk_number = chunk_number.value if chunk_number and chunk_number.value else 3
-        # make it int
-        chunk_number = int(chunk_number)
-        results = search_across_indices(question, file_ids, top_k=chunk_number)
-        if not results and not history_text:
-            # Save query with answer_found=False and return no content message
-            message = {
-                "fi": "Valitettavasti en löytänyt vastausta kysymykseesi. Olen tallentanut sen ja tiimimme tarkistaa sen.",
-                "en": "I'm sorry, I couldn't find a specific answer to your question. I've noted it down and our team will review it.",
-            }.get(language, "en")
 
-            query = save_query(answer_found=False, answer=message)
+        chunk_number_setting = Settings.query.filter_by(key="chunk_number").first()
+        chunk_number_value = (
+            chunk_number_setting.value if chunk_number_setting and chunk_number_setting.value else 3
+        )
+        base_chunk_number = max(int(chunk_number_value), 1)
+        broad_query = is_broad_query(question)
+        fetch_multiplier = 5 if broad_query else 3
+        target_top_k = min(max(base_chunk_number * (2 if broad_query else 1), base_chunk_number), 20)
+
+        results = search_across_indices(
+            question,
+            file_ids,
+            top_k=target_top_k,
+            fetch_multiplier=fetch_multiplier,
+        )
+
+        if not results and not history_text:
+            query = save_query(answer_found=False, answer=fallback_message)
 
             # Create new question for review
             new_question = NewQuestion(question=question)
             db.session.add(new_question)
             db.session.commit()
 
-            return jsonify({"answer": message, "type": "info", "query_id": query.id})
+            return jsonify({"answer": fallback_message, "type": "info", "query_id": query.id})
 
-        # 4. Build context from results
-        context = "\n\n".join(
-            [
-                f"Relevant content from {file_id_to_title[r['file_id']]}:\n{r['chunk']}"
-                for r in results
-                if r["file_id"] in file_id_to_title
-            ]
-        )
-        used_files = [
-            {
-                "name": file_id_to_title[r["file_id"]],
-                "chunk": r.get("chunk", ""),  # adjust to your actual field name
-            }
-            for r in results
-            if r["file_id"] in file_id_to_title
-        ]
-
-        # 5. Generate answer via OpenAI
+        # 4. Prepare context with adaptive token budgeting
         system_prompt = {
             "en": "You are a helpful assistant. Use the following context to answer the question in English. If the context doesn't contain enough information to answer the question, say so. And for casual greetings and chats, reply and ask how can i assist you.",
             "fi": "Olet avulias assistentti. Käytä seuraavaa kontekstia vastataksesi kysymykseen suomeksi. Jos kontekstissa ei ole tarpeeksi tietoa vastataksesi kysymykseen, kerro niin:",
         }
-        prompt_content = f"""Conversation so far:{history_text} User's latest question:{question}Retrieved context:{context}"""
-        client = OpenAI(api_key=openai_key.value)
-        response = client.chat.completions.create(
-            model=(
-                openai_model.value if openai_model and openai_model.value else "gpt-4"
+
+        model_name = openai_model.value if openai_model and openai_model.value else "gpt-4"
+        model_context_window = get_model_context_window(model_name)
+        system_prompt_text = system_prompt.get(language, system_prompt["en"])
+        question_tokens = estimate_text_tokens(question)
+        history_tokens = estimate_text_tokens(history_text)
+        system_prompt_tokens = estimate_text_tokens(system_prompt_text)
+        max_answer_tokens = 600
+        safety_buffer = 200
+        context_budget = max(
+            model_context_window
+            - (
+                system_prompt_tokens
+                + question_tokens
+                + history_tokens
+                + max_answer_tokens
+                + safety_buffer
             ),
-            messages=[
-                {
-                    "role": "system",
-                    "content": system_prompt.get(language, system_prompt["en"]),
-                },
-                {
-                    "role": "user",
-                    # "content": f"Context: {context}\n\nQuestion: {question}",
-                    "content": prompt_content,
-                },
-            ],
-            temperature=0.8,
-            max_tokens=600,
+            0,
         )
 
-        answer = response.choices[0].message.content
+        context_entries, context_token_usage = build_context_entries(
+            results,
+            file_id_to_title,
+            context_budget,
+        )
+        context = "\n\n".join(entry["content"] for entry in context_entries)
+        token_diagnostics = {
+            "model_context_window": model_context_window,
+            "context_budget": context_budget,
+            "context_tokens_used": context_token_usage,
+            "question_tokens": question_tokens,
+            "history_tokens": history_tokens,
+            "system_prompt_tokens": system_prompt_tokens,
+        }
+
+        if not context_entries:
+            query = save_query(answer_found=False, answer=fallback_message)
+            return jsonify(
+                {
+                    "answer": fallback_message,
+                    "sources_used": "",
+                    "used_file_names": [],
+                    "matched_chunks": [],
+                    "token_diagnostics": token_diagnostics,
+                    "type": "info",
+                    "query_id": query.id,
+                }
+            )
+
+        used_files = []
+        for entry in context_entries:
+            result = entry["result"]
+            title = file_id_to_title.get(result["file_id"])
+            if not title:
+                continue
+            used_files.append(
+                {
+                    "name": title,
+                    "chunk": result.get("chunk", ""),
+                    "metadata": result.get("metadata", {}),
+                    "score": result.get("score"),
+                    "tokens": entry["tokens"],
+                }
+            )
+
+        # 5. Generate answer via OpenAI
+        prompt_content = f"""Conversation so far:{history_text} User's latest question:{question}Retrieved context:{context}"""
+        client = OpenAI(api_key=openai_key.value)
+        try:
+            response = client.chat.completions.create(
+                model=model_name,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": system_prompt_text,
+                    },
+                    {
+                        "role": "user",
+                        # "content": f"Context: {context}\n\nQuestion: {question}",
+                        "content": prompt_content,
+                    },
+                ],
+                temperature=0.8,
+                max_tokens=600,
+            )
+            answer = response.choices[0].message.content
+        except Exception as e:
+            print(f"OpenAI chat error: {str(e)}")
+            query = save_query(answer_found=False, answer=fallback_message)
+            return jsonify(
+                {
+                    "answer": fallback_message,
+                    "error": str(e),
+                    "sources_used": "",
+                    "used_file_names": [],
+                    "matched_chunks": used_files,
+                    "token_diagnostics": token_diagnostics,
+                    "type": "error",
+                    "query_id": query.id,
+                }
+            ), 500
         used_file_names = []  # For PDF generation - just clean file names
+        sources_used = ""
         if used_files:
             files_list = []
             for f in used_files:
@@ -251,7 +417,17 @@ def chat():
         # 6. Save query with the generated answer
         query = save_query(answer=answer)
         # PRINT clean_file_names
-        return jsonify({"answer": answer,"sources_used":sources_used, "used_file_names":used_file_names, "type": "success", "query_id": query.id})
+        return jsonify(
+            {
+                "answer": answer,
+                "sources_used": sources_used,
+                "used_file_names": used_file_names,
+                "matched_chunks": used_files,
+                "token_diagnostics": token_diagnostics,
+                "type": "success",
+                "query_id": query.id,
+            }
+        )
 
     except Exception as e:
         print(f"Error in chat route: {str(e)}")
@@ -263,10 +439,7 @@ def handle_no_content(question, language):
     db.session.add(new_question)
     db.session.commit()
 
-    message = {
-        "fi": "Valitettavasti en löytänyt vastausta kysymykseesi. Olen tallentanut sen ja tiimimme tarkistaa sen.",
-        "en": "I'm sorry, I couldn't find a specific answer to your question. I've noted it down and our team will review it.",
-    }.get(language, language["en"])
+    message = FALLBACK_MESSAGES.get(language, FALLBACK_MESSAGES["en"])
 
     return jsonify({"answer": message, "type": "info"})
 
@@ -858,9 +1031,11 @@ def api_upload_file():
                         continue
 
                     filename = generate_filename(file, text)
+                    document_metadata = load_document_metadata(file_identifier) if file_identifier else {}
 
                     db_file = File(
                         text=text,
+                        summary=document_metadata.get("summary"),
                         user_id=current_user.id,
                         file_identifier=file_identifier,
                         original_filename=filename,
@@ -927,9 +1102,11 @@ def api_upload_file():
                 )
 
             filename = generate_filename(url, text)
+            document_metadata = load_document_metadata(file_identifier) if file_identifier else {}
 
             db_file = File(
                 text=text,
+                summary=document_metadata.get("summary"),
                 user_id=current_user.id,
                 file_identifier=file_identifier,
                 original_filename=filename,
@@ -956,9 +1133,11 @@ def api_upload_file():
                 )
 
             filename = generate_filename(text, text)
+            document_metadata = load_document_metadata(file_identifier) if file_identifier else {}
 
             db_file = File(
                 text=text,
+                summary=document_metadata.get("summary"),
                 user_id=current_user.id,
                 file_identifier=file_identifier,
                 original_filename=filename,
@@ -1432,6 +1611,9 @@ def regenerate_missing_embeddings():
             file_identifier = generate_and_store_embeddings(file.text)
             if file_identifier:
                 file.file_identifier = file_identifier
+                metadata = load_document_metadata(file_identifier)
+                if metadata.get("summary"):
+                    file.summary = metadata.get("summary")
                 # print(f"Regenerated embedding for file {file.id}")
 
         # Check FAQs
