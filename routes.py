@@ -411,7 +411,7 @@ def admin_zotero():
 @main.route("/api/zotero/libraries", methods=["GET"])
 @login_required
 def api_zotero_libraries():
-    """Return list of Zotero libraries (My Library + groups) for the configured user."""
+    """Return list of Zotero libraries with per-library last sync time and result."""
     try:
         api_key = Settings.query.filter_by(key="zotero_api_key").first()
         user_id = Settings.query.filter_by(key="zotero_user_id").first()
@@ -424,6 +424,20 @@ def api_zotero_libraries():
                 "message": "Configure Zotero API key and User ID in Settings.",
             })
         libraries = get_libraries(user_id.strip(), api_key.strip())
+        last_sync_raw = Settings.query.filter_by(key="zotero_last_sync_by_library").first()
+        last_result_raw = Settings.query.filter_by(key="zotero_last_sync_result_by_library").first()
+        try:
+            last_sync_by = json.loads(last_sync_raw.value) if last_sync_raw and last_sync_raw.value else {}
+        except Exception:
+            last_sync_by = {}
+        try:
+            last_result_by = json.loads(last_result_raw.value) if last_result_raw and last_result_raw.value else {}
+        except Exception:
+            last_result_by = {}
+        for lib in libraries:
+            lib_key = f"{lib['type']}/{lib['id']}"
+            lib["last_sync"] = last_sync_by.get(lib_key)
+            lib["last_sync_result"] = last_result_by.get(lib_key)
         return jsonify({"libraries": libraries, "connected": True})
     except Exception as e:
         print(f"Zotero libraries error: {e}")
@@ -434,10 +448,76 @@ def api_zotero_libraries():
         }), 500
 
 
+def _sync_one_zotero_library(lib_type, lib_id, api_key, user_id):
+    """Sync one Zotero library. Returns (synced, skipped, errors)."""
+    synced = skipped = errors = 0
+    for att in get_items_with_attachments(lib_type, lib_id, api_key):
+        item_key = att["item_key"]
+        filename = att["filename"]
+        external_id = f"zotero:{lib_type}/{lib_id}/{item_key}"
+        if File.query.filter_by(external_id=external_id).first():
+            skipped += 1
+            continue
+        data, down_filename = download_attachment_file(
+            lib_type, lib_id, item_key, api_key
+        )
+        if not data:
+            errors += 1
+            continue
+        name = down_filename or filename
+        file_like = file_like_for_zotero(data, name)
+        text = extract_text_from_file(file_like)
+        if not text:
+            skipped += 1
+            continue
+        try:
+            file_identifier = generate_and_store_embeddings(text)
+            if not file_identifier:
+                errors += 1
+                continue
+            file_like.seek(0)
+            display_name = generate_filename(file_like, text)
+            db_file = File(
+                text=text,
+                user_id=user_id,
+                file_identifier=file_identifier,
+                original_filename=display_name,
+                source="zotero",
+                external_id=external_id,
+            )
+            db.session.add(db_file)
+            synced += 1
+        except Exception as e:
+            print(f"Zotero sync error for {name}: {e}")
+            errors += 1
+            continue
+    return synced, skipped, errors
+
+
+def _update_zotero_last_sync_for_library(lib_key, now_str, result_dict):
+    """Update per-library last sync time and result in Settings (JSON)."""
+    from datetime import datetime as dt
+    for setting_key, default, update_fn in [
+        ("zotero_last_sync_by_library", "{}", lambda d: {**d, lib_key: now_str}),
+        ("zotero_last_sync_result_by_library", "{}", lambda d: {**d, lib_key: result_dict}),
+    ]:
+        setting = Settings.query.filter_by(key=setting_key).first()
+        try:
+            data = json.loads(setting.value) if setting and setting.value else {}
+        except Exception:
+            data = {}
+        data = update_fn(data)
+        value = json.dumps(data)
+        if setting:
+            setting.value = value
+        else:
+            db.session.add(Settings(key=setting_key, value=value))
+
+
 @main.route("/api/zotero/sync", methods=["POST"])
 @login_required
 def api_zotero_sync():
-    """Sync allowed file types from My Library and all groups. Skips unsupported types."""
+    """Sync one library or all. POST body: {} for all, or {"library_type": "user", "library_id": "123"} for one."""
     try:
         api_key_setting = Settings.query.filter_by(key="zotero_api_key").first()
         user_id_setting = Settings.query.filter_by(key="zotero_user_id").first()
@@ -451,79 +531,56 @@ def api_zotero_sync():
 
         api_key = api_key.strip()
         user_id = user_id.strip()
-        synced = 0
-        skipped = 0
-        errors = 0
+        data = request.get_json(silent=True) or {}
+        library_type = data.get("library_type")
+        library_id = data.get("library_id")
 
-        for lib in get_libraries(user_id, api_key):
-            lib_type = lib["type"]
-            lib_id = lib["id"]
-            for att in get_items_with_attachments(lib_type, lib_id, api_key):
-                item_key = att["item_key"]
-                filename = att["filename"]
-                external_id = f"zotero:{lib_type}/{lib_id}/{item_key}"
-                if File.query.filter_by(external_id=external_id).first():
-                    skipped += 1
-                    continue
-                data, down_filename = download_attachment_file(
-                    lib_type, lib_id, item_key, api_key
-                )
-                if not data:
-                    errors += 1
-                    continue
-                name = down_filename or filename
-                file_like = file_like_for_zotero(data, name)
-                text = extract_text_from_file(file_like)
-                if not text:
-                    skipped += 1
-                    continue
-                try:
-                    file_identifier = generate_and_store_embeddings(text)
-                    if not file_identifier:
-                        errors += 1
-                        continue
-                    file_like.seek(0)
-                    display_name = generate_filename(file_like, text)
-                    db_file = File(
-                        text=text,
-                        user_id=current_user.id,
-                        file_identifier=file_identifier,
-                        original_filename=display_name,
-                        source="zotero",
-                        external_id=external_id,
-                    )
-                    db.session.add(db_file)
-                    synced += 1
-                except Exception as e:
-                    print(f"Zotero sync error for {name}: {e}")
-                    errors += 1
-                    continue
-
-        db.session.commit()
-
-        # Update last sync time and result
         from datetime import datetime as dt
         now_str = dt.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-        result_json = json.dumps({"synced": synced, "skipped": skipped, "errors": errors})
-        for key, value in [
-            ("zotero_last_sync", now_str),
-            ("zotero_last_sync_result", result_json),
-        ]:
-            setting = Settings.query.filter_by(key=key).first()
-            if setting:
-                setting.value = value
-            else:
-                db.session.add(Settings(key=key, value=value))
-        db.session.commit()
 
-        message = f"Synced {synced} file(s). Skipped: {skipped}. Errors: {errors}."
-        return jsonify({
-            "type": "success",
-            "message": message,
-            "synced": synced,
-            "skipped": skipped,
-            "errors": errors,
-        })
+        if library_type and library_id:
+            # Sync single library
+            synced, skipped, errors = _sync_one_zotero_library(
+                library_type, library_id, api_key, current_user.id
+            )
+            db.session.commit()
+            lib_key = f"{library_type}/{library_id}"
+            _update_zotero_last_sync_for_library(
+                lib_key, now_str, {"synced": synced, "skipped": skipped, "errors": errors}
+            )
+            db.session.commit()
+            message = f"Synced {synced} file(s). Skipped: {skipped}. Errors: {errors}."
+            return jsonify({
+                "type": "success",
+                "message": message,
+                "synced": synced,
+                "skipped": skipped,
+                "errors": errors,
+                "library_key": lib_key,
+            })
+        else:
+            # Sync all libraries
+            total_synced = total_skipped = total_errors = 0
+            for lib in get_libraries(user_id, api_key):
+                st, sk, er = _sync_one_zotero_library(
+                    lib["type"], lib["id"], api_key, current_user.id
+                )
+                total_synced += st
+                total_skipped += sk
+                total_errors += er
+                lib_key = f"{lib['type']}/{lib['id']}"
+                _update_zotero_last_sync_for_library(
+                    lib_key, now_str, {"synced": st, "skipped": sk, "errors": er}
+                )
+            db.session.commit()
+            message = f"Synced {total_synced} file(s). Skipped: {total_skipped}. Errors: {total_errors}."
+            return jsonify({
+                "type": "success",
+                "message": message,
+                "synced": total_synced,
+                "skipped": total_skipped,
+                "errors": total_errors,
+            })
     except Exception as e:
         print(f"Zotero sync error: {e}")
         db.session.rollback()
@@ -562,14 +619,20 @@ def admin_backup():
                     full = os.path.join(dirpath, name)
                     arcname = os.path.join("thesis-rag", rel_base, name) if rel_base else os.path.join("thesis-rag", name)
                     zf.write(full, arcname)
-            # Include SQLite database (same file the app uses)
+            # Include SQLite database: from config URI and/or instance/ (Flask often puts DB there)
             db_uri = current_app.config.get("SQLALCHEMY_DATABASE_URI", "")
+            added_db_path = None
             if db_uri.startswith("sqlite:///"):
                 db_path = db_uri.replace("sqlite:///", "", 1).strip()
                 if not os.path.isabs(db_path):
                     db_path = os.path.join(root, db_path)
                 if os.path.isfile(db_path):
                     zf.write(db_path, os.path.join("thesis-rag", os.path.basename(db_path)))
+                    added_db_path = os.path.normpath(db_path)
+            instance_db = os.path.join(root, "instance", "chatbot.db")
+            if os.path.isfile(instance_db):
+                if added_db_path is None or not os.path.samefile(added_db_path, instance_db):
+                    zf.write(instance_db, os.path.join("thesis-rag", "instance", "chatbot.db"))
         buf.seek(0)
         filename = f"thesis-rag-backup-{datetime.now().strftime('%Y%m%d-%H%M')}.zip"
         return send_file(

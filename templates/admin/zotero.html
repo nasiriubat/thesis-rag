@@ -47,6 +47,10 @@
     }
     .zotero-lib-list li:last-child { border-bottom: none; }
     .zotero-lib-list .badge { font-size: 0.75rem; }
+    .zotero-lib-row { align-items: center; gap: 0.75rem; flex-wrap: wrap; }
+    .zotero-lib-name { flex: 1; min-width: 120px; }
+    .zotero-lib-meta { font-size: 0.875rem; color: #6c757d; }
+    .zotero-lib-actions { flex-shrink: 0; }
 </style>
 {% endblock %}
 
@@ -84,28 +88,6 @@
                 </div>
             </div>
         </div>
-        <div class="col-lg-6">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3 d-flex justify-content-between align-items-center">
-                    <h6 class="m-0 font-weight-bold text-primary">Last sync</h6>
-                </div>
-                <div class="card-body">
-                    <div id="zotero-last-sync">
-                        {% if settings.get('zotero_last_sync') %}
-                        <p class="mb-1">
-                            <i class="fas fa-clock me-2"></i>
-                            <span id="zotero-last-sync-time">{{ settings.get('zotero_last_sync') }}</span>
-                        </p>
-                        {% if last_sync_summary %}
-                        <p class="small text-muted mb-0" id="zotero-last-sync-result">{{ last_sync_summary }}</p>
-                        {% endif %}
-                        {% else %}
-                        <p class="text-muted mb-0" id="zotero-last-sync-time">No sync yet</p>
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </div>
     </div>
 
     <div class="card shadow mb-4">
@@ -113,12 +95,13 @@
             <h6 class="m-0 font-weight-bold text-primary">Your libraries</h6>
         </div>
         <div class="card-body">
+            <p class="text-muted small mb-3">Sync each library separately. Last sync time and result are shown per library.</p>
             <ul class="zotero-lib-list" id="zotero-libraries">
                 <li class="text-muted"><i class="fas fa-spinner fa-spin me-2"></i>Loading…</li>
             </ul>
-            <hr>
-            <button type="button" class="btn btn-primary btn-lg" id="zotero-sync-btn" disabled>
-                <i class="fas fa-sync-alt me-2"></i>Sync from Zotero
+            <hr class="my-3">
+            <button type="button" class="btn btn-outline-primary" id="zotero-sync-all-btn" disabled title="Sync all libraries">
+                <i class="fas fa-sync-alt me-2"></i>Sync all
             </button>
         </div>
     </div>
@@ -137,8 +120,47 @@
 (function() {
     const statusEl = document.getElementById('zotero-connection-status');
     const libListEl = document.getElementById('zotero-libraries');
-    const syncBtn = document.getElementById('zotero-sync-btn');
+    const syncAllBtn = document.getElementById('zotero-sync-all-btn');
     const loaderEl = document.getElementById('zotero-loader');
+
+    function formatSyncTime(iso) {
+        if (!iso) return 'Never';
+        try {
+            const d = new Date(iso);
+            return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+        } catch (e) { return iso; }
+    }
+
+    function formatResult(res) {
+        if (!res) return '';
+        return 'Synced: ' + (res.synced || 0) + ', Skipped: ' + (res.skipped || 0) + ', Errors: ' + (res.errors || 0);
+    }
+
+    function runSync(payload, btn) {
+        if (btn) btn.disabled = true;
+        loaderEl.classList.add('show');
+        fetch('{{ url_for("main.api_zotero_sync") }}', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify(payload || {})
+        })
+            .then(r => r.json())
+            .then(data => {
+                loaderEl.classList.remove('show');
+                if (btn) btn.disabled = false;
+                if (data.type === 'success') {
+                    toastr.success(data.message);
+                    loadLibraries();
+                } else {
+                    toastr.error(data.message || 'Sync failed');
+                }
+            })
+            .catch(function() {
+                loaderEl.classList.remove('show');
+                if (btn) btn.disabled = false;
+                toastr.error('Sync request failed');
+            });
+    }
 
     function loadLibraries() {
         fetch('{{ url_for("main.api_zotero_libraries") }}')
@@ -147,14 +169,33 @@
                 if (data.connected) {
                     document.getElementById('zotero-not-configured-alert').classList.add('d-none');
                     statusEl.innerHTML = '<p class="text-success mb-0"><i class="fas fa-check-circle me-2"></i>Connected</p>';
-                    syncBtn.disabled = false;
+                    syncAllBtn.disabled = false;
                     libListEl.innerHTML = '';
                     if (data.libraries && data.libraries.length) {
                         data.libraries.forEach(function(lib) {
                             const li = document.createElement('li');
+                            li.className = 'zotero-lib-row d-flex';
                             const badge = lib.type === 'user' ? 'primary' : 'secondary';
-                            li.innerHTML = '<span class="badge bg-' + badge + '">' + lib.type + '</span> ' + (lib.name || lib.id);
+                            const lastSync = formatSyncTime(lib.last_sync);
+                            const resultText = formatResult(lib.last_sync_result);
+                            const syncBtnId = 'zotero-sync-' + lib.type + '-' + lib.id.replace(/\W/g, '_');
+                            li.innerHTML =
+                                '<div class="zotero-lib-name">' +
+                                '<span class="badge bg-' + badge + ' me-2">' + lib.type + '</span>' +
+                                '<strong>' + (lib.name || lib.id) + '</strong>' +
+                                '</div>' +
+                                '<div class="zotero-lib-meta">' +
+                                '<span class="d-block" title="' + (lib.last_sync || '') + '"><i class="fas fa-clock me-1"></i>' + lastSync + '</span>' +
+                                (resultText ? '<span class="d-block small">' + resultText + '</span>' : '') +
+                                '</div>' +
+                                '<div class="zotero-lib-actions">' +
+                                '<button type="button" class="btn btn-primary btn-sm" id="' + syncBtnId + '" data-type="' + lib.type + '" data-id="' + lib.id + '">' +
+                                '<i class="fas fa-sync-alt me-1"></i>Sync</button>' +
+                                '</div>';
                             libListEl.appendChild(li);
+                            document.getElementById(syncBtnId).addEventListener('click', function() {
+                                runSync({ library_type: this.dataset.type, library_id: this.dataset.id }, this);
+                            });
                         });
                     } else {
                         libListEl.innerHTML = '<li class="text-muted">No libraries found</li>';
@@ -173,30 +214,8 @@
 
     loadLibraries();
 
-    syncBtn.addEventListener('click', function() {
-        syncBtn.disabled = true;
-        loaderEl.classList.add('show');
-        fetch('{{ url_for("main.api_zotero_sync") }}', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            body: JSON.stringify({})
-        })
-            .then(r => r.json())
-            .then(data => {
-                loaderEl.classList.remove('show');
-                syncBtn.disabled = false;
-                if (data.type === 'success') {
-                    toastr.success(data.message);
-                    window.location.reload();
-                } else {
-                    toastr.error(data.message || 'Sync failed');
-                }
-            })
-            .catch(function(err) {
-                loaderEl.classList.remove('show');
-                syncBtn.disabled = false;
-                toastr.error('Sync request failed');
-            });
+    syncAllBtn.addEventListener('click', function() {
+        runSync({}, this);
     });
 })();
 </script>
