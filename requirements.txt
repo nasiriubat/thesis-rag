@@ -11,7 +11,7 @@ python-dotenv
 PyPDF2
 python-docx
 beautifulsoup4
-requests
+requests   # HTTP client (used for Zotero API, URLs, etc.)
 tqdm
 youtube-transcript-api 
 gunicorn 

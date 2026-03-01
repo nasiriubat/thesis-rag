@@ -34,6 +34,13 @@ import re
 from pathlib import Path
 from werkzeug.utils import secure_filename
 import time
+from zotero_client import (
+    get_libraries,
+    get_items_with_attachments,
+    download_attachment_file,
+    file_like_for_zotero,
+    ALLOWED_EXTENSIONS_LABEL,
+)
 try:
     from selenium import webdriver
     from selenium.webdriver.chrome.options import Options
@@ -149,10 +156,14 @@ def chat():
         if not file_ids:
             return handle_no_content(question, language)
         # get chunk number from settings
-        chunk_number = Settings.query.filter_by(key="chunk_number").first()
-        chunk_number = chunk_number.value if chunk_number and chunk_number.value else 3
-        # make it int
-        chunk_number = int(chunk_number)
+        chunk_setting = Settings.query.filter_by(key="chunk_number").first()
+        chunk_number = chunk_setting.value if chunk_setting and chunk_setting.value else 3
+        try:
+            chunk_number = int(chunk_number)
+            if chunk_number < 1 or chunk_number > 5:
+                chunk_number = 3
+        except (TypeError, ValueError):
+            chunk_number = 3
         results = search_across_indices(question, file_ids, top_k=chunk_number)
         if not results and not history_text:
             # Save query with answer_found=False and return no content message
@@ -374,87 +385,263 @@ def admin_queries():
     return render_template("admin/queries.html", queries=[], settings=settings)
 
 
+@main.route("/admin/zotero")
+@login_required
+def admin_zotero():
+    settings = {s.key: s.value for s in Settings.query.all()}
+    last_result = settings.get("zotero_last_sync_result")
+    last_sync_summary = None
+    if last_result:
+        try:
+            d = json.loads(last_result)
+            last_sync_summary = f"Synced: {d.get('synced', 0)}, Skipped: {d.get('skipped', 0)}, Errors: {d.get('errors', 0)}"
+        except Exception:
+            pass
+    return render_template(
+        "admin/zotero.html",
+        settings=settings,
+        allowed_extensions_label=ALLOWED_EXTENSIONS_LABEL,
+        last_sync_summary=last_sync_summary,
+    )
+
+
+@main.route("/api/zotero/libraries", methods=["GET"])
+@login_required
+def api_zotero_libraries():
+    """Return list of Zotero libraries (My Library + groups) for the configured user."""
+    try:
+        api_key = Settings.query.filter_by(key="zotero_api_key").first()
+        user_id = Settings.query.filter_by(key="zotero_user_id").first()
+        api_key = api_key.value if api_key and api_key.value else None
+        user_id = user_id.value if user_id and user_id.value else None
+        if not api_key or not user_id:
+            return jsonify({
+                "libraries": [],
+                "connected": False,
+                "message": "Configure Zotero API key and User ID in Settings.",
+            })
+        libraries = get_libraries(user_id.strip(), api_key.strip())
+        return jsonify({"libraries": libraries, "connected": True})
+    except Exception as e:
+        print(f"Zotero libraries error: {e}")
+        return jsonify({
+            "libraries": [],
+            "connected": False,
+            "message": str(e),
+        }), 500
+
+
+@main.route("/api/zotero/sync", methods=["POST"])
+@login_required
+def api_zotero_sync():
+    """Sync allowed file types from My Library and all groups. Skips unsupported types."""
+    try:
+        api_key_setting = Settings.query.filter_by(key="zotero_api_key").first()
+        user_id_setting = Settings.query.filter_by(key="zotero_user_id").first()
+        api_key = api_key_setting.value if api_key_setting and api_key_setting.value else None
+        user_id = user_id_setting.value if user_id_setting and user_id_setting.value else None
+        if not api_key or not user_id:
+            return jsonify({
+                "type": "error",
+                "message": "Configure Zotero API key and User ID in Settings first.",
+            }), 400
+
+        api_key = api_key.strip()
+        user_id = user_id.strip()
+        synced = 0
+        skipped = 0
+        errors = 0
+
+        for lib in get_libraries(user_id, api_key):
+            lib_type = lib["type"]
+            lib_id = lib["id"]
+            for att in get_items_with_attachments(lib_type, lib_id, api_key):
+                item_key = att["item_key"]
+                filename = att["filename"]
+                external_id = f"zotero:{lib_type}/{lib_id}/{item_key}"
+                if File.query.filter_by(external_id=external_id).first():
+                    skipped += 1
+                    continue
+                data, down_filename = download_attachment_file(
+                    lib_type, lib_id, item_key, api_key
+                )
+                if not data:
+                    errors += 1
+                    continue
+                name = down_filename or filename
+                file_like = file_like_for_zotero(data, name)
+                text = extract_text_from_file(file_like)
+                if not text:
+                    skipped += 1
+                    continue
+                try:
+                    file_identifier = generate_and_store_embeddings(text)
+                    if not file_identifier:
+                        errors += 1
+                        continue
+                    file_like.seek(0)
+                    display_name = generate_filename(file_like, text)
+                    db_file = File(
+                        text=text,
+                        user_id=current_user.id,
+                        file_identifier=file_identifier,
+                        original_filename=display_name,
+                        source="zotero",
+                        external_id=external_id,
+                    )
+                    db.session.add(db_file)
+                    synced += 1
+                except Exception as e:
+                    print(f"Zotero sync error for {name}: {e}")
+                    errors += 1
+                    continue
+
+        db.session.commit()
+
+        # Update last sync time and result
+        from datetime import datetime as dt
+        now_str = dt.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        result_json = json.dumps({"synced": synced, "skipped": skipped, "errors": errors})
+        for key, value in [
+            ("zotero_last_sync", now_str),
+            ("zotero_last_sync_result", result_json),
+        ]:
+            setting = Settings.query.filter_by(key=key).first()
+            if setting:
+                setting.value = value
+            else:
+                db.session.add(Settings(key=key, value=value))
+        db.session.commit()
+
+        message = f"Synced {synced} file(s). Skipped: {skipped}. Errors: {errors}."
+        return jsonify({
+            "type": "success",
+            "message": message,
+            "synced": synced,
+            "skipped": skipped,
+            "errors": errors,
+        })
+    except Exception as e:
+        print(f"Zotero sync error: {e}")
+        db.session.rollback()
+        return jsonify({"type": "error", "message": str(e)}), 500
+
+
+def _apply_settings_update(settings_to_update, preserve_empty_keys=None):
+    """Apply a dict of key->value to Settings table. Keys in preserve_empty_keys are skipped when value is empty."""
+    preserve_empty_keys = preserve_empty_keys or []
+    for key, value in settings_to_update.items():
+        if value is None:
+            continue
+        if key in preserve_empty_keys and (value is None or str(value).strip() == ""):
+            continue
+        setting = Settings.query.filter_by(key=key).first()
+        if setting:
+            setting.value = value
+        else:
+            setting = Settings(key=key, value=value)
+            db.session.add(setting)
+
+
 @main.route("/admin/settings", methods=["GET", "POST"])
 @login_required
 def admin_settings():
     if request.method == "POST":
         try:
-            # Handle file uploads
+            section = request.form.get("settings_section")
+            if not section or section not in ("site", "theme", "api", "pages"):
+                return jsonify({"message": "Invalid settings section", "type": "error"}), 400
+
             upload_dir = os.path.join(current_app.static_folder, "uploads")
             os.makedirs(upload_dir, exist_ok=True)
 
-            settings_to_update = {
-                "logo": request.form.get("logo"),
-                "chunk_number": request.form.get("chunk_number"),
-                "openai_key": request.form.get("openai_key"),
-                "copyright": request.form.get("copyright"),
-                "about": request.form.get("about"),
-                "contact": request.form.get("contact"),
-                "openai_model": request.form.get("openai_model"),
-                "show_matched_text": request.form.get("show_matched_text", "yes"),
-                "faq_search_enabled": request.form.get("faq_search_enabled", "yes"),
-                "theme_primary_color": request.form.get("theme_primary_color", "#5b1fa6"),
-                "theme_secondary_color": request.form.get("theme_secondary_color", "#d1aff3"),
-                "theme_bot_message_color": request.form.get("theme_bot_message_color", "#f3f0fa"),
-                "theme_background_start": request.form.get("theme_background_start", "#f5f0ff"),
-                "theme_background_end": request.form.get("theme_background_end", "#ede3f7"),
-                "theme_accent_color": request.form.get("theme_accent_color", "#5b1fa6"),
-                "message_history": request.form.get("message_history", 10),
-            }
+            if section == "site":
+                chunk_raw = request.form.get("chunk_number")
+                msg_raw = request.form.get("message_history")
+                try:
+                    chunk_number = int(chunk_raw) if chunk_raw not in (None, "") else None
+                    if chunk_number is not None and (chunk_number < 1 or chunk_number > 5):
+                        chunk_number = None
+                except (TypeError, ValueError):
+                    chunk_number = None
+                try:
+                    message_history = int(msg_raw) if msg_raw not in (None, "") else None
+                    if message_history is not None and (message_history < 1 or message_history > 15):
+                        message_history = None
+                except (TypeError, ValueError):
+                    message_history = None
+                settings_to_update = {
+                    "logo": request.form.get("logo"),
+                    "copyright": request.form.get("copyright"),
+                    "show_matched_text": request.form.get("show_matched_text", "yes"),
+                    "faq_search_enabled": request.form.get("faq_search_enabled", "yes"),
+                }
+                if chunk_number is not None:
+                    settings_to_update["chunk_number"] = str(chunk_number)
+                if message_history is not None:
+                    settings_to_update["message_history"] = str(message_history)
+                logo_file = request.files.get("logo_file")
+                if logo_file and logo_file.filename:
+                    old_logo = Settings.query.filter_by(key="logo_file").first()
+                    if old_logo and old_logo.value:
+                        old_logo_path = os.path.join(upload_dir, old_logo.value)
+                        if os.path.exists(old_logo_path):
+                            os.remove(old_logo_path)
+                    filename = secure_filename(logo_file.filename)
+                    logo_file.save(os.path.join(upload_dir, filename))
+                    settings_to_update["logo_file"] = filename
+                favicon_file = request.files.get("favicon_file")
+                if favicon_file and favicon_file.filename:
+                    old_favicon = Settings.query.filter_by(key="favicon_file").first()
+                    if old_favicon and old_favicon.value:
+                        old_favicon_path = os.path.join(upload_dir, old_favicon.value)
+                        if os.path.exists(old_favicon_path):
+                            os.remove(old_favicon_path)
+                    filename = secure_filename(favicon_file.filename)
+                    favicon_file.save(os.path.join(upload_dir, filename))
+                    settings_to_update["favicon_file"] = filename
+                _apply_settings_update(settings_to_update)
 
-            # Handle logo file upload
-            logo_file = request.files.get("logo_file")
-            if logo_file and logo_file.filename:
-                # Delete old logo if exists
-                old_logo = Settings.query.filter_by(key="logo_file").first()
-                if old_logo and old_logo.value:
-                    old_logo_path = os.path.join(upload_dir, old_logo.value)
-                    if os.path.exists(old_logo_path):
-                        os.remove(old_logo_path)
+            elif section == "theme":
+                settings_to_update = {
+                    "theme_primary_color": request.form.get("theme_primary_color", "#5b1fa6"),
+                    "theme_secondary_color": request.form.get("theme_secondary_color", "#d1aff3"),
+                    "theme_bot_message_color": request.form.get("theme_bot_message_color", "#f3f0fa"),
+                    "theme_background_start": request.form.get("theme_background_start", "#f5f0ff"),
+                    "theme_background_end": request.form.get("theme_background_end", "#ede3f7"),
+                    "theme_accent_color": request.form.get("theme_accent_color", "#5b1fa6"),
+                }
+                _apply_settings_update(settings_to_update)
 
-                # Save new logo
-                filename = secure_filename(logo_file.filename)
-                logo_file.save(os.path.join(upload_dir, filename))
-                settings_to_update["logo_file"] = filename
+            elif section == "api":
+                openai_model = request.form.get("openai_model")
+                settings_to_update = {
+                    "openai_key": request.form.get("openai_key"),
+                    "openai_model": openai_model if (openai_model and str(openai_model).strip()) else None,
+                    "zotero_api_key": request.form.get("zotero_api_key"),
+                    "zotero_user_id": request.form.get("zotero_user_id"),
+                }
+                _apply_settings_update(settings_to_update, preserve_empty_keys=["openai_key", "zotero_api_key"])
 
-            # Handle favicon file upload
-            favicon_file = request.files.get("favicon_file")
-            if favicon_file and favicon_file.filename:
-                # Delete old favicon if exists
-                old_favicon = Settings.query.filter_by(key="favicon_file").first()
-                if old_favicon and old_favicon.value:
-                    old_favicon_path = os.path.join(upload_dir, old_favicon.value)
-                    if os.path.exists(old_favicon_path):
-                        os.remove(old_favicon_path)
-
-                # Save new favicon
-                filename = secure_filename(favicon_file.filename)
-                favicon_file.save(os.path.join(upload_dir, filename))
-                settings_to_update["favicon_file"] = filename
-
-            for key, value in settings_to_update.items():
-                # Skip None values to avoid constraint errors
-                if value is None:
-                    continue
-                    
-                setting = Settings.query.filter_by(key=key).first()
-                if setting:
-                    setting.value = value
-                else:
-                    setting = Settings(key=key, value=value)
-                    db.session.add(setting)
+            elif section == "pages":
+                about_val = request.form.get("about")
+                contact_val = request.form.get("contact")
+                # Avoid saving literal "undefined" from frontend if editors not ready
+                if about_val == "undefined":
+                    about_val = None
+                if contact_val == "undefined":
+                    contact_val = None
+                settings_to_update = {
+                    "about": about_val,
+                    "contact": contact_val,
+                }
+                _apply_settings_update(settings_to_update)
 
             db.session.commit()
-            return jsonify(
-                {"message": "Settings updated successfully", "type": "success"}
-            )
+            return jsonify({"message": "Settings updated successfully", "type": "success"})
         except Exception as e:
-            return (
-                jsonify(
-                    {"message": f"Error updating settings: {str(e)}", "type": "error"}
-                ),
-                500,
-            )
+            db.session.rollback()
+            return jsonify({"message": str(e), "type": "error"}), 500
 
     settings = {s.key: s.value for s in Settings.query.all()}
     models = []
@@ -485,7 +672,16 @@ def admin_settings():
     else:
         models = ["gpt-4"]
 
-    return render_template("admin/settings.html", settings=settings, models=models)
+    # Do not pass API key values to template (avoid exposure in HTML/inspect)
+    openai_key_set = bool(settings.get("openai_key"))
+    zotero_api_key_set = bool(settings.get("zotero_api_key"))
+    return render_template(
+        "admin/settings.html",
+        settings=settings,
+        models=models,
+        openai_key_set=openai_key_set,
+        zotero_api_key_set=zotero_api_key_set,
+    )
 
 
 @main.route("/admin/new-questions")
@@ -993,12 +1189,13 @@ def get_file_paths(file_identifier):
 
 def delete_associated_files(file_identifier):
     """Delete all associated files for a given file identifier."""
+    if not file_identifier or not str(file_identifier).strip():
+        return
     try:
         file_paths = get_file_paths(file_identifier)
         for file_path in file_paths.values():
             if os.path.exists(file_path):
                 os.remove(file_path)
-                # print(f"Deleted associated file: {file_path}")
     except Exception as e:
         print(f"Error deleting associated files: {str(e)}")
 
@@ -1309,7 +1506,8 @@ def api_files_paginated():
                 'text': file.text[:100] + '...' if len(file.text) > 100 else file.text,
                 'user_name': file.user.name if file.user else 'Unknown',
                 'created_at': file.created_at.strftime('%Y-%m-%d %H:%M'),
-                'file_identifier': file.file_identifier
+                'file_identifier': file.file_identifier,
+                'source': file.source or 'upload',
             })
         
         return jsonify({

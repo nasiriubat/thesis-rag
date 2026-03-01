@@ -233,6 +233,9 @@
             <a href="{{ url_for('main.admin_queries') }}" class="nav-link {% if request.endpoint == 'main.admin_queries' %}active{% endif %}">
                 <i class="fas fa-search"></i>Queries
             </a>
+            <a href="{{ url_for('main.admin_zotero') }}" class="nav-link {% if request.endpoint == 'main.admin_zotero' %}active{% endif %}">
+                <i class="fas fa-book"></i>Zotero
+            </a>
             <div class="nav-divider"></div>
             <a href="{{ url_for('main.admin_settings') }}" class="nav-link {% if request.endpoint == 'main.admin_settings' %}active{% endif %}">
                 <i class="fas fa-cog"></i>Settings

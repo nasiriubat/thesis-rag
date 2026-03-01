@@ -65,11 +65,27 @@ A Flask-based chatbot application that uses OpenAI's GPT model to answer questio
 
 ## Running the Application
 
+**Easiest (local):** From the project root, one-time setup then run:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate   # Windows: .\venv\Scripts\activate
+   pip install -r requirements.txt
+   python init_db.py         # creates DB + admin (admin@example.com / 123456)
+   python app.py
+   ```
+   Then open **http://127.0.0.1:4001** (or the port in `.env` if you set `PORT`). Admin: **http://127.0.0.1:4001/admin**
+
+   Or use the helper script (after venv + pip install):
+   ```bash
+   chmod +x run-local.sh
+   ./run-local.sh
+   ```
+
 1. **Development Mode**
    ```bash
    python app.py
    ```
-   The application will be available at `http://localhost:8080`
+   The application will be available at `http://localhost:4001` (default; set `PORT` in `.env` to change)
 
 2. **Production Mode**
    ```bash
@@ -103,7 +119,7 @@ project/
 ## First-Time Setup
 
 1. **Access the Admin Interface**
-   - Go to `http://localhost:5000/admin/login`
+   - Go to `http://localhost:4001/admin/login` (or your `PORT` from `.env`)
    - Login with:
      - Email: admin@example.com
      - Password: 123456
